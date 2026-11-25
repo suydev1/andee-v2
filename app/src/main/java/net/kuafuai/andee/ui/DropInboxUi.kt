@@ -12,7 +12,6 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import net.kuafuai.andee.compat.WindowMetricsCompat
 import net.kuafuai.andee.config.DropInbox
 import net.kuafuai.andee.net.DropFence
 import java.util.concurrent.Executors
@@ -77,8 +76,15 @@ class DropInboxUi(
         }
     }
 
-    private fun cardWidth() = minOf(dp(500), (WindowMetricsCompat.bounds(wm).width() * 0.94f).toInt())
-    private fun cardHeight() = minOf(dp(600), (WindowMetricsCompat.bounds(wm).height() * 0.86f).toInt())
+    private fun cardWidth(): Int {
+        val screen = Glass.usableSize(context).first
+        return minOf(screen - dp(2 * 20), (screen * 0.98f).toInt())
+    }
+
+    private fun cardHeight(): Int {
+        val screen = Glass.usableSize(context).second
+        return minOf(screen - dp(2 * 20), (screen * 0.96f).toInt())
+    }
 
     private fun build(): View {
         val card = LinearLayout(context).apply {
@@ -103,6 +109,11 @@ class DropInboxUi(
             setTextColor(Color.parseColor(Glass.SECONDARY))
         })
         header.addView(titles, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(button("Add files", filled = false) {
+            context.startActivity(
+                Intent(context, DropPickerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(8) })
         header.addView(TextView(context).apply {
             text = "✕"
             textSize = Glass.Type.CAPTION
@@ -136,11 +147,6 @@ class DropInboxUi(
             background = Glass.well(context, dp(10))
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        footer.addView(button("Add from Files", filled = false) {
-            context.startActivity(
-                Intent(context, DropPickerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         card.addView(footer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         return card
     }

@@ -159,6 +159,14 @@ class FloatingWindowUi(
          * is behind it and what it is allowed to open.
          */
         fun onSelfCheckClick()
+
+        /**
+         * The folder key — our own drop inbox.
+         *
+         * Like [onSelfCheckClick] and [onSettingsClick], it opens one of our own
+         * surfaces rather than acting on the screen, so it starts no task.
+         */
+        fun onDropInboxClick()
         fun onLongPress()
 
         /** The Artifacts key — the pages the assistant has made. See [ArtifactsUi]. */
@@ -3440,7 +3448,8 @@ class FloatingWindowUi(
      *
      * Scenes sits beside it for a weaker version of the same reason: scenes *can*
      * be managed by talking, but "what has it learned to do with me" is a
-     * question a list answers better than a conversation. Five keys now.
+     * question a list answers better than a conversation. The folder key sits
+     * beside self-check and Settings: it opens our own inbox, so no task starts.
      *
      * The glyphs take [Glass.PHOTO_INK], not one of the card's inks. They sit on
      * [Glass.well] over the photograph, which is the same ground the tips sit on, and a
@@ -3468,7 +3477,7 @@ class FloatingWindowUi(
         keys.addView(
             barButton(R.drawable.ic_artifacts, Glass.PHOTO_INK, "Artifact") { listeners.onArtifactsClick() }
         )
-        // Artifacts · Notebook · Scenes · Friends · self-check · Settings — the Mac's sidebar has the same doors in the same order.
+        // Artifacts · In progress · Notebook · Scenes · Inbox · self-check · Settings — our own surfaces, in that order.
         keys.addView(tasksKey())
         keys.addView(notebookKey())
         keys.addView(barButton(R.drawable.ic_scene, Glass.PHOTO_INK, "Scene") { listeners.onScenesClick() })
@@ -3481,6 +3490,7 @@ class FloatingWindowUi(
         // unfolded (so the way to type vanished with the fold — the same fault
         // that made "tap the top-right ⌨" a lie in a failure message), and it put a
         // second meaning on the one control the user already had to learn.
+        keys.addView(barButton(R.drawable.ic_folder, Glass.PHOTO_INK, "Inbox") { listeners.onDropInboxClick() })
         keys.addView(barButton(R.drawable.ic_settings, Glass.PHOTO_INK, "Settings") { listeners.onSettingsClick() })
             // Reads as close, not as resize: the card is a thing you dismiss, and the
         // corner ball it folds into stays on screen either way.
