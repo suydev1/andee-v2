@@ -19,19 +19,20 @@ object FileWalk {
     fun walk(
         root: File, query: String, ext: String?, limit: Int,
         budgetMs: Long, maxVisited: Int = 20_000,
+        deadlineMs: Long = System.currentTimeMillis() + budgetMs,
     ): Result {
-        val deadline = System.currentTimeMillis() + budgetMs
         val hits = ArrayList<Hit>()
         val queue = ArrayDeque<File>()
         queue.add(root)
         var visited = 0
         var partial = false
-        while (queue.isNotEmpty() && hits.size < limit && visited < maxVisited) {
-            if (System.currentTimeMillis() >= deadline) { partial = true; break }
+        outer@ while (queue.isNotEmpty() && hits.size < limit && visited < maxVisited) {
             val dir = queue.removeFirst()
-            visited++
             val children = runCatching { dir.listFiles() }.getOrNull() ?: continue
             for (f in children) {
+                if (System.currentTimeMillis() >= deadlineMs) { partial = true; break@outer }
+                if (visited >= maxVisited) { partial = true; break@outer }
+                visited++
                 if (f.name.startsWith(".")) continue
                 if (f.isDirectory && f.name.equals("Android", ignoreCase = true)) continue
                 if (f.isDirectory) {
@@ -43,11 +44,10 @@ object FileWalk {
                         modified = runCatching { f.lastModified() }.getOrDefault(0L),
                         mime = mime(f.name),
                     )
-                    if (hits.size >= limit) break
+                    if (hits.size >= limit) break@outer
                 }
             }
         }
-        if (visited >= maxVisited && hits.size < limit) partial = true
         return Result(hits, visited, partial)
     }
 }

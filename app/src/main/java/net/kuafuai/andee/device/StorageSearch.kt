@@ -33,12 +33,22 @@ object StorageSearch {
                 val hits = ArrayList<FileWalk.Hit>()
                 var visited = 0
                 var partial = false
+                val deadline = System.currentTimeMillis() + 2000
                 for (root in ownRoots(context)) {
-                    val r = FileWalk.walk(root, query, ext, cap - hits.size, 2000)
+                    val remainingMs = deadline - System.currentTimeMillis()
+                    if (remainingMs <= 0) { partial = true; break }
+                    val remainingVisits = 20_000 - visited
+                    if (remainingVisits <= 0) { partial = true; break }
+                    val r = FileWalk.walk(
+                        root, query, ext, cap - hits.size,
+                        remainingMs, remainingVisits, deadline,
+                    )
                     hits += r.hits
                     visited += r.visited
                     partial = partial || r.partial
-                    if (hits.size >= cap) break
+                    if (hits.size >= cap || r.partial ||
+                        System.currentTimeMillis() >= deadline || visited >= 20_000
+                    ) break
                 }
                 FileWalk.Result(hits, visited, partial)
             }
