@@ -401,6 +401,7 @@ class SettingsUi(
         webSearchSection(form)
         storageSection(form)
         dropSection(form)
+        fileEditsSection(form)
         vaultSection(form)
         maxStepsSection(form)
 
@@ -1176,6 +1177,19 @@ class SettingsUi(
             open()
         })
         panel.addView(row, rowParams(dp(12)))
+    }
+
+    private fun fileEditsSection(form: LinearLayout) {
+        val panel = group(form, lctx.getString(R.string.settings_section_file_edits))
+        panel.addView(TextView(context).apply {
+            text = lctx.getString(R.string.settings_file_edits_note)
+            textSize = Glass.Type.CAPTION
+            setTextColor(Color.parseColor(Glass.SECONDARY))
+        }, rowParams(0))
+        segmented(panel, "file_edits", listOf(
+            "off" to lctx.getString(R.string.common_off),
+            "on" to lctx.getString(R.string.common_on),
+        ))
     }
 
     private fun vaultSection(form: LinearLayout) {

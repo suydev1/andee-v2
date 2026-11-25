@@ -758,6 +758,7 @@ object VoiceConfig {
                 "drop_max_bytes" to p.getString(
                     "drop_max_bytes", DEFAULT_DROP_MAX_BYTES.toString(),
                 ).toString(),
+                "file_edits" to if (fileEditsEnabled(context)) "on" else "off",
                 "max_steps" to maxSteps(context).toString(),
             )
         }
@@ -816,6 +817,10 @@ object VoiceConfig {
                 .getString("drop_max_bytes", null)?.toLongOrNull() ?: return DEFAULT_DROP_MAX_BYTES
             return saved.coerceIn(MIN_DROP_BYTES, MAX_DROP_BYTES)
         }
+
+        fun fileEditsEnabled(context: Context): Boolean = context
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("file_edits", "").orEmpty().trim().lowercase() == "on"
 
         const val LANG_ZH = "zh"
         const val LANG_EN = "en"
@@ -1137,6 +1142,7 @@ object VoiceConfig {
             "ball",
             "sweep", "sweep_quiet_minutes", "sweep_daily_cap",
             "drop_max_bytes",
+            "file_edits",
             "max_steps",
         )
 }

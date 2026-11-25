@@ -1075,4 +1075,6 @@
     <string name="playbooks_uses">Uses: </string>
     <string name="playbooks_delete">Delete</string>
     <string name="playbooks_confirm_delete">Confirm delete</string>
+    <string name="settings_section_file_edits">File editing</string>
+    <string name="settings_file_edits_note">Off by default. When on, Andee can write, edit, move and delete files in the folders it may reach, only when you start the turn.</string>
 </resources>
