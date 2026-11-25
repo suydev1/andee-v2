@@ -11,7 +11,7 @@ It has **two bodies today**, in three Gradle modules (root project `body`, packa
 Two orientation facts that are easy to get wrong:
 
 - **The Android body is `BodyCoreService`, a foreground service, and the screen half is `ScreenBodyService`, an `AccessibilityService` that hands it the screen capability** (`attachScreen`). Almost everything the user sees is a `WindowManager` overlay (the floating ball); there is no main UI, and `BodyCoreService` is what builds the whole object graph. If the accessibility service isn't enabled in system settings, nothing works — **which is why there is now exactly one Activity in the launcher**, `ui/SelfCheckActivity`. It is not a home screen: it is the readiness checklist, and it exists because a device whose accessibility service is off would otherwise have no way in and no way to be told why. See "Startup self-check" below.
-- **Docs are split by audience.** `README.md` is the front page, **English on top and Chinese below it, in one file** (what it is, how it compares, how to install); it is deliberately short. What used to be in it moved, unchanged, to `docs/build-and-provision.md` / `.zh-CN.md` (build, provisioning, the exhaustive SDK setup — read these for first-time device provisioning) and `docs/reference.md` / `.zh-CN.md` (features, architecture, permissions, wake word, the robot dog). `docs/permissions.md` is the permission justification, with a Chinese edition at `docs/permissions.zh-CN.md`. The same one-file-per-language rule governs `DISCLAIMER`, `docs/acceptable-use` and `CONTRIBUTING` — English on the default filename, Chinese on `.zh-CN`, and each language linking only to its own counterparts. (`SECURITY.md` and `CODE_OF_CONDUCT.md` exist in English only.) It used to tell you to `cd body-native`; the checkout is the **repository root**. (Fixed 2026-09-29.)
+- **Docs are split by audience.** `README.md` is the front page, **English on top and Chinese below it, in one file** (what it is, how it compares, how to install); it is deliberately short. What used to be in it moved, unchanged, to `docs/build-and-provision.md` / `.zh-CN.md` (build, provisioning, the exhaustive SDK setup — read these for first-time device provisioning) and `docs/reference.md` / `.zh-CN.md` (features, architecture, permissions, wake word, the robot dog). `docs/permissions.md` is the permission justification, with a Chinese edition at `docs/permissions.zh-CN.md`. The same one-file-per-language rule governs `DISCLAIMER`, `docs/acceptable-use` and `CONTRIBUTING` — English on the default filename, Chinese on `.zh-CN`, and each language linking only to its own counterparts. (`SECURITY.md` and `CODE_OF_CONDUCT.md` exist in English only.) It used to tell you to `cd body-native`; the checkout is the **repository root**. (Fixed 2026-09-29.) The front page also links `docs/getting-started.md` / `.zh-CN.md` for first-time orientation; keep those mirrors in step when the front page changes.
 
 ## Build and run
 
@@ -19,10 +19,11 @@ Two orientation facts that are easy to get wrong:
 ./gradlew assembleDebug          # APKs → app/build/outputs/apk/debug/app-<abi>-debug.apk
 ./gradlew installDebug           # build + install to the attached device
 ./gradlew assembleRelease        # minified APKs → app/build/outputs/apk/release/app-<abi>-release-unsigned.apk
-./gradlew test                   # host-side JUnit (only template tests exist)
-./gradlew connectedAndroidTest   # instrumented tests (needs a device; only a template test exists)
+./gradlew :core:test                      # real host tests: brain guards, friends, contexts, tasks
+./gradlew :app:testDebugUnitTest          # real app host tests, including golden prompt/tool snapshots
+./gradlew :core:test --tests 'net.kuafuai.andee.brain.ContextPrunerTest'
+./gradlew :app:testDebugUnitTest --tests 'net.kuafuai.andee.config.SomeTest'
 adb logcat -s Body:* BodyWs:* BodyWsClient:* Asr:* Tts:* Peers:* PeerTasks:*   # the log tags this app uses
-./gradlew :core:test                      # the real unit tests: brain guards, friends (pairing, link, tasks, QR)
 ./gradlew :desktop:createDistributable    # → desktop/build/compose/binaries/main/app/Andee.app (arm64, macOS 14+)
 ./gradlew :desktop:uishot --args='chat 1280 960 /tmp/ui.png'   # the Mac UI drawn offscreen (no OpenGL: no ball)
 # Mac log: ~/Library/Application Support/Andee/andee.log; trace: brain_trace.jsonl beside it
@@ -36,21 +37,28 @@ and the debug variant was carrying 13 MB of un-shrunk dex. Hand someone
 also a CI gate now, because R8 and `lintVitalRelease` only run there and a release build that nobody
 runs is how a broken `assembleRelease` sat unnoticed.
 
-There is **no real test suite** — `ExampleUnitTest` / `ExampleInstrumentedTest` are unmodified templates. Verification is manual: install, watch logcat, drive the ball. There is no lint/format task configured beyond AGP defaults.
+Host tests are a real gate, not templates: `core/src/test` and `app/src/test` contain substantial suites (brain guards, contexts, tasks, friends, golden prompt/tool snapshots). CI runs `./gradlew --no-daemon :app:assembleDebug`, `:app:testDebugUnitTest`, `:core:test`, and a separate `:app:assembleRelease` gate — see `.github/workflows/build.yml`. A change to `ToolSchemas` or `LocalPrompt` can break the golden snapshots under `app/src/test/resources/golden`; regenerate and review that diff in the same change. Device verification is still manual: install, watch logcat, drive the ball. There is no lint/format task configured beyond AGP defaults.
 
 Toolchain notes that bite:
 
 - `gradle.properties` **does not pin the Gradle JDK** — it used to hardcode a machine-specific `org.gradle.java.home`, which made the build fail instantly on every other machine. The build needs a **JDK in the 17–20 range**: AGP 8.3.1 requires 17+, and the Gradle 8.4 wrapper cannot run on 21+ (Android Studio's bundled JBR 25 dies with `Unsupported class file major version 69`). Set `JAVA_HOME`, or put `org.gradle.java.home=<path to JDK 17–20>` in **`~/.gradle/gradle.properties`** — never in the repo's copy. In Android Studio, set *Settings → Build Tools → Gradle → Gradle JDK* to a 17–20 JDK.
 - `settings.gradle` puts **Aliyun mirrors first** for both plugin and dependency resolution. Keep them first when editing; they're there because the project is developed behind the GFW.
 - **The root `build.gradle` pins R8 on the buildscript classpath** (`com.android.tools:r8`). AGP 8.3's bundled R8 reads Kotlin metadata only up to 2.0, and the move to Kotlin 2.1 made `minifyReleaseWithR8` fail outright ("Provided Metadata instance has version 2.1.0") — so `assembleRelease` was broken while `assembleDebug` was fine. Bump the pin whenever Kotlin moves.
+- **Host tests that construct JSON need the JVM artifact.** `app/build.gradle` has `testImplementation 'org.json:json:20240303'`; `core/build.gradle` has `compileOnly` plus `testImplementation` for the same version. Android's framework `org.json` stubs throw "not mocked" in a plain JVM, so add this dependency to any new host-test module that uses `JSONObject` / `JSONArray`.
 - `minSdk 27` (Android 8.1) since v0.13.0 — the app installs, talks and runs there, but **the screen half is API 30+**: `ACTION_IME_ENTER` and `AccessibilityService.takeScreenshot` are both API 30+, so below 11 it can read the accessibility tree and cannot see the screen. `SelfCheck.platformVersion()` raises an amber WARN on those versions instead of the installer refusing the package; on API 30+ every guard takes the original branch.
 - Deliberately **no Jetpack Compose, no Hilt/Dagger, no coroutines.** Overlays can't host Compose, so all UI is hand-written `View` code; there's exactly one service, so dependencies are constructor-injected by hand; concurrency is `Handler` + dedicated `Executor`s. Match this style rather than introducing the modern stack.
+
+## Harness notes for this environment
+
+`Glob`, `Grep`, `grep`, `glob`, and the `opencode` CLI do not work in this harness. Do not call them. Use Bash with `python3` to search and inspect files, and use the Read/Write/Edit wrappers that actually work here. When a tool call fails with an unknown-tool error, re-issue it with a working name instead of retrying the broken one.
+
+At the start of any Java/Kotlin task, load the relevant skills from `~/.agents/SKILL-ROUTER.md` before writing code: `java-kotlin`, `ecc:kotlin-patterns`, `ecc:java-coding-standards`, `ecc:android-clean-architecture`, `ecc:kotlin-testing`. For review add `ecc:kotlin-reviewer`, `ecc:java-reviewer`, `ecc:code-reviewer`; for multi-task execution add `superpowers:subagent-driven-development`. Read the skill docs; naming them is not loading them.
 
 ## Architecture
 
 ### Wiring
 
-`ScreenBodyService.onServiceConnected()` builds the entire object graph and is the best single file to read first. It creates `FloatingWindowUi` → `AudioIO` → `TtsController` / `AsrController` → `ScreenController` → `CommandDispatcher`, then starts **both** networking paths.
+`BodyCoreService.onCreate()` builds the entire object graph and is the best single file to read first. It creates `FloatingWindowUi` → `AudioIO` → `TtsController` / `AsrController` → `ScreenController` → `CommandDispatcher`, then starts **both** networking paths. `ScreenBodyService.onServiceConnected()` only hands the screen capability to `BodyCoreService` (`attachScreen`) and starts the body; it deliberately does not build or own the graph.
 
 ### Two networking paths, one dispatcher
 
