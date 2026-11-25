@@ -398,6 +398,7 @@ class SettingsUi(
         driveSection(form)
         timelineSection(form)
         friendsSection(form)
+        webSearchSection(form)
         dropSection(form)
         vaultSection(form)
         maxStepsSection(form)
@@ -1105,6 +1106,18 @@ class SettingsUi(
             rowParams(dp(10)),
         )
     }
+
+    private fun webSearchSection(form: LinearLayout) {
+        val panel = group(form, lctx.getString(R.string.settings_section_web_search))
+        panel.addView(TextView(context).apply {
+            text = lctx.getString(R.string.settings_web_search_note)
+            textSize = Glass.Type.CAPTION
+            setTextColor(Color.parseColor(Glass.SECONDARY))
+        }, rowParams(0))
+        field(panel, "tavily_key", lctx.getString(R.string.settings_web_search_key),
+            hint = lctx.getString(R.string.settings_web_search_key_hint), secret = true)
+    }
+
     private fun dropSection(form: LinearLayout) {
         val open = onOpenDropInbox ?: return
         val panel = group(form, lctx.getString(R.string.settings_section_drop))

@@ -237,6 +237,10 @@
     <string name="settings_drop_cap_100">100 MB</string>
     <string name="settings_drop_cap_1gb">1 GB</string>
     <string name="settings_drop_open">Open inbox</string>
+    <string name="settings_section_web_search">Web search</string>
+    <string name="settings_web_search_note">Live results from Tavily. The key stays on this device and is never sent anywhere except Tavily.</string>
+    <string name="settings_web_search_key">Search API key</string>
+    <string name="settings_web_search_key_hint">tvly-…</string>
     <string name="settings_section_vault">Vault</string>
     <string name="settings_vault_empty_note">No accounts yet — once saved, Andee can log in as you when a task needs it</string>
     <string name="settings_vault_count_note">%1$d saved — the brain may read the phone and email, but only this device types the password</string>
