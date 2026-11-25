@@ -75,6 +75,8 @@
          promise still has to reach the user. Runtime permission on 13+; the
          code degrades to "no nudge" if it is refused, never to a lost todo. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Needed only when the user turns on full-device file search; see StorageAccessActivity. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!--
          The body runs as a foreground service, and the reason is the whole
          point of the split: a foreground service is what keeps the process —
@@ -283,6 +285,13 @@
             android:theme="@style/Theme.Body.Stage"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity
+            android:name=".device.StorageAccessActivity"
+            android:theme="@style/Theme.Body.Stage.NoPreview"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:autoRemoveFromRecents="true"
+            android:taskAffinity="" />
         <!-- Picks a document for the drop inbox. No launcher entry: the service opens it. -->
         <activity
             android:name=".ui.DropPickerActivity"

@@ -42,6 +42,19 @@ class TurnGuardsTest {
         }
     }
 
+    @Test fun `files cannot be opened or changed from a stranger's turn`() {
+        for (m in listOf("file.open", "file.write", "file.edit", "file.mkdir", "file.move", "file.delete")) {
+            refused(m, untrusted = true)
+        }
+    }
+
+    @Test fun `file tools need a live user turn`() {
+        for (m in listOf("file.open", "file.write", "file.edit", "file.mkdir", "file.move", "file.delete")) {
+            TurnGuards.check(m, silent = false, untrusted = false, kind = TurnKind.USER)
+            refusedKind(m, TurnKind.PEER)
+        }
+    }
+
     @Test
     fun `a silent turn may only use the notebook`() {
         TurnGuards.check("note.remember", silent = true, untrusted = false)

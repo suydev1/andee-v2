@@ -52,10 +52,10 @@ class DropInbox(
         }
 
         fun label(status: Status): String = when (status) {
-            Status.NEW -> "待读"
-            Status.TOO_LARGE -> "太大，未读取"
-            Status.UNSUPPORTED -> "类型不支持"
-            Status.MISSING -> "文件已不在"
+            Status.NEW -> "New"
+            Status.TOO_LARGE -> "Too large — not read"
+            Status.UNSUPPORTED -> "Unsupported type"
+            Status.MISSING -> "File gone"
         }
     }
 

@@ -242,6 +242,21 @@ object VoiceConfig {
                 context.assets.open("andee_key.txt").bufferedReader().use { it.readText().trim() }
             }.getOrDefault("").ifEmpty { BuildConfig.CODEFLYING_KEY }
 
+        fun tavilyKey(context: Context): String = context
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("tavily_key", "").orEmpty().trim()
+
+        fun storageTree(context: Context): String = context
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("storage_tree", "").orEmpty()
+
+        fun setStorageTree(context: Context, uri: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+                if (uri.isBlank()) remove("storage_tree") else putString("storage_tree", uri)
+                apply()
+            }
+        }
+
         /** Origin for the market tools; see [net.kuafuai.andee.config.CodeFlyingEndpoint.marketBaseUrl]. */
         fun codeFlyingMarketBaseUrl(context: Context): String =
             codeFlyingEndpoint(context)?.marketBaseUrl.orEmpty()
@@ -718,6 +733,8 @@ object VoiceConfig {
                 // ([llmModelDefault]: DeepSeek for a Chinese card, OpenAI for an
                 // English one) could never be seen.
                 "llm_api_key" to p.getString("llm_api_key", "").orEmpty(),
+                "tavily_key" to p.getString("tavily_key", "").orEmpty(),
+                "storage_tree" to p.getString("storage_tree", "").orEmpty(),
                 "llm_base_url" to p.getString("llm_base_url", "").orEmpty(),
                 "llm_model" to p.getString("llm_model", "").orEmpty(),
                 // Round-tripped as the wire words rather than a boolean: this map
@@ -741,6 +758,7 @@ object VoiceConfig {
                 "drop_max_bytes" to p.getString(
                     "drop_max_bytes", DEFAULT_DROP_MAX_BYTES.toString(),
                 ).toString(),
+                "file_edits" to if (fileEditsEnabled(context)) "on" else "off",
                 "max_steps" to maxSteps(context).toString(),
             )
         }
@@ -799,6 +817,10 @@ object VoiceConfig {
                 .getString("drop_max_bytes", null)?.toLongOrNull() ?: return DEFAULT_DROP_MAX_BYTES
             return saved.coerceIn(MIN_DROP_BYTES, MAX_DROP_BYTES)
         }
+
+        fun fileEditsEnabled(context: Context): Boolean = context
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("file_edits", "").orEmpty().trim().lowercase() == "on"
 
         const val LANG_ZH = "zh"
         const val LANG_EN = "en"
@@ -1107,6 +1129,8 @@ object VoiceConfig {
             "brain",
             "show_hub",
             "llm_api_key", "llm_base_url", "llm_model",
+            "tavily_key",
+            "storage_tree",
             "llm_thinking", "llm_reasoning_effort",
             "grounding",
             "notify",
@@ -1118,6 +1142,7 @@ object VoiceConfig {
             "ball",
             "sweep", "sweep_quiet_minutes", "sweep_daily_cap",
             "drop_max_bytes",
+            "file_edits",
             "max_steps",
         )
 }

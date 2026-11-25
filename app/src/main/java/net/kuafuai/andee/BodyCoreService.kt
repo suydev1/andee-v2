@@ -340,6 +340,10 @@ class BodyCoreService : Service() {
                 openSelfCheck()
             }
 
+            override fun onDropInboxClick() {
+                openDropInbox()
+            }
+
             override fun onTextInputToggle() {
                 // Opening the field is a new request, like a tap: whatever is running or being read out stops
                 // first. Closing it (the field already up) stops nothing.

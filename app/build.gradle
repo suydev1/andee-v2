@@ -261,6 +261,7 @@ dependencies {
     implementation libs.material
     implementation 'org.java-websocket:Java-WebSocket:1.5.7'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'androidx.documentfile:documentfile:1.0.1'
 
     // The robot dog's dongle is a plain USB-serial device (Arduino Nano:
     // CH340/CH9102/FTDI depending on the clone). 3.8.1 deliberately, not the

@@ -1649,11 +1649,11 @@ class LocalBrain(
                 )
             }
 
-            // Reading somebody else's file makes the rest of this turn untrusted,
-            // including the read itself. turnUntrusted covers later tool calls in
-            // the same turn; callUntrusted covers this one.
+            // Reading somebody else's file, or a page someone else wrote, makes the rest of
+            // this turn untrusted, including the read itself. turnUntrusted covers later tool
+            // calls in the same turn; callUntrusted covers this one.
             var callUntrusted = untrusted
-            if (method == "note.drop_read") {
+            if (method == "note.drop_read" || method == "web.search") {
                 turnUntrusted = true
                 callUntrusted = true
             }
