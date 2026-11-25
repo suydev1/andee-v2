@@ -27,7 +27,7 @@ object FileWalk {
         var visited = 0
         var partial = false
         while (queue.isNotEmpty() && hits.size < limit && visited < maxVisited) {
-            if (System.currentTimeMillis() > deadline) { partial = true; break }
+            if (System.currentTimeMillis() >= deadline) { partial = true; break }
             val dir = queue.removeFirst()
             visited++
             val children = runCatching { dir.listFiles() }.getOrNull() ?: continue
