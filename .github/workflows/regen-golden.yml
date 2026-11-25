@@ -1,0 +1,27 @@
+name: regen golden
+on:
+  workflow_dispatch:
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Force golden regeneration in test JVM
+        run: |
+          python3 - <<'PY2'
+          p = 'app/src/test/java/net/kuafuai/andee/golden/GoldenTextTest.kt'
+          s = open(p).read()
+          s = s.replace('System.getProperty("golden.update") == "true"', 'true')
+          open(p, 'w').write(s)
+          PY2
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: golden-tool-schemas
+          path: app/src/test/resources/golden/tool_schemas.json
+          if-no-files-found: error
