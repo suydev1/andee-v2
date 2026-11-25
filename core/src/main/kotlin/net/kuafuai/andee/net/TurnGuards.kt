@@ -54,7 +54,7 @@ object TurnGuards {
     )
 
     private val FILE_WRITES = setOf(
-        "file.open", "file.write", "file.edit", "file.mkdir", "file.move", "file.delete",
+        "file.open", "file.read", "file.write", "file.edit", "file.mkdir", "file.move", "file.delete",
     )
 
     /** The home screen's middle is the first thing the user sees; a stranger does not get to paint it. */

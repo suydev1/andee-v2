@@ -1656,6 +1656,12 @@ class LocalBrain(
             if (method == "note.drop_read" || method == "web.search") {
                 turnUntrusted = true
                 callUntrusted = true
+            } else if (method == "file.read") {
+                // The read itself must still reach the device as a trusted user
+                // call: TurnGuards refuses file.read on an untrusted turn, so
+                // latching this call would refuse the very read. Only the rest
+                // of the turn is poisoned by the text it returns.
+                turnUntrusted = true
             }
 
             // The wait budget. Watching somebody else's twenty-minute job by waiting and looking is the

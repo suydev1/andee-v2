@@ -1,6 +1,7 @@
 package net.kuafuai.andee.net
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -53,6 +54,17 @@ class TurnGuardsTest {
             TurnGuards.check(m, silent = false, untrusted = false, kind = TurnKind.USER)
             refusedKind(m, TurnKind.PEER)
         }
+    }
+
+    @Test fun `reading a file needs a live user turn too`() {
+        TurnGuards.check("file.read", silent = false, untrusted = false, kind = TurnKind.USER)
+        for (kind in listOf(TurnKind.PEER, TurnKind.NOTIFY, TurnKind.WORK, TurnKind.SWEEP, TurnKind.PASSIVE)) {
+            refusedKind("file.read", kind)
+        }
+        assertTrue(refused("file.read", silent = true).contains("silent turn"))
+        val stranger = refused("file.read", untrusted = true)
+        assertTrue(stranger.contains("somebody else"))
+        assertTrue(stranger.contains("file.read"))
     }
 
     @Test
