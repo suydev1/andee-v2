@@ -241,6 +241,12 @@
     <string name="settings_web_search_note">Live results from Tavily. The key stays on this device and is never sent anywhere except Tavily.</string>
     <string name="settings_web_search_key">Search API key</string>
     <string name="settings_web_search_key_hint">tvly-…</string>
+    <string name="settings_section_storage">Storage access</string>
+    <string name="settings_storage_own">Andee\'s own files only</string>
+    <string name="settings_storage_picked">One picked folder</string>
+    <string name="settings_storage_managed">Whole device storage</string>
+    <string name="settings_storage_note">File search uses this scope. A picked folder can be searched but not edited in this build.</string>
+    <string name="settings_storage_open">Grant / change access</string>
     <string name="settings_section_vault">Vault</string>
     <string name="settings_vault_empty_note">No accounts yet — once saved, Andee can log in as you when a task needs it</string>
     <string name="settings_vault_count_note">%1$d saved — the brain may read the phone and email, but only this device types the password</string>

@@ -399,6 +399,7 @@ class SettingsUi(
         timelineSection(form)
         friendsSection(form)
         webSearchSection(form)
+        storageSection(form)
         dropSection(form)
         vaultSection(form)
         maxStepsSection(form)
@@ -1116,6 +1117,42 @@ class SettingsUi(
         }, rowParams(0))
         field(panel, "tavily_key", lctx.getString(R.string.settings_web_search_key),
             hint = lctx.getString(R.string.settings_web_search_key_hint), secret = true)
+    }
+
+    private fun storageSection(form: LinearLayout) {
+        val panel = group(form, lctx.getString(R.string.settings_section_storage))
+        val state = TextView(context).apply {
+            textSize = Glass.Type.CAPTION
+            setTextColor(Color.parseColor(Glass.LABEL))
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }
+        fun refresh() {
+            state.text = when (net.kuafuai.andee.device.StorageSearch.scope(context)) {
+                net.kuafuai.andee.device.StorageSearch.Scope.MANAGED ->
+                    lctx.getString(R.string.settings_storage_managed)
+                net.kuafuai.andee.device.StorageSearch.Scope.PICKED ->
+                    lctx.getString(R.string.settings_storage_picked)
+                net.kuafuai.andee.device.StorageSearch.Scope.OWN ->
+                    lctx.getString(R.string.settings_storage_own)
+            }
+        }
+        refresh()
+        panel.addView(state, rowParams(0))
+        panel.addView(TextView(context).apply {
+            text = lctx.getString(R.string.settings_storage_note)
+            textSize = Glass.Type.CAPTION
+            setTextColor(Color.parseColor(Glass.SECONDARY))
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }, rowParams(0))
+        val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(button(lctx.getString(R.string.settings_storage_open), filled = false) {
+            hide()
+            context.startActivity(
+                android.content.Intent(context, net.kuafuai.andee.device.StorageAccessActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        })
+        panel.addView(row, rowParams(dp(12)))
     }
 
     private fun dropSection(form: LinearLayout) {

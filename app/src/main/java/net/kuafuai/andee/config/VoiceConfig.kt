@@ -246,6 +246,17 @@ object VoiceConfig {
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("tavily_key", "").orEmpty().trim()
 
+        fun storageTree(context: Context): String = context
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("storage_tree", "").orEmpty()
+
+        fun setStorageTree(context: Context, uri: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+                if (uri.isBlank()) remove("storage_tree") else putString("storage_tree", uri)
+                apply()
+            }
+        }
+
         /** Origin for the market tools; see [net.kuafuai.andee.config.CodeFlyingEndpoint.marketBaseUrl]. */
         fun codeFlyingMarketBaseUrl(context: Context): String =
             codeFlyingEndpoint(context)?.marketBaseUrl.orEmpty()
@@ -723,6 +734,7 @@ object VoiceConfig {
                 // English one) could never be seen.
                 "llm_api_key" to p.getString("llm_api_key", "").orEmpty(),
                 "tavily_key" to p.getString("tavily_key", "").orEmpty(),
+                "storage_tree" to p.getString("storage_tree", "").orEmpty(),
                 "llm_base_url" to p.getString("llm_base_url", "").orEmpty(),
                 "llm_model" to p.getString("llm_model", "").orEmpty(),
                 // Round-tripped as the wire words rather than a boolean: this map
@@ -1113,6 +1125,7 @@ object VoiceConfig {
             "show_hub",
             "llm_api_key", "llm_base_url", "llm_model",
             "tavily_key",
+            "storage_tree",
             "llm_thinking", "llm_reasoning_effort",
             "grounding",
             "notify",
