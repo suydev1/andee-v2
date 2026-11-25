@@ -17,13 +17,16 @@ object StorageSearch {
         else -> Scope.OWN
     }
 
-    private fun ownRoots(context: Context): List<File> = listOfNotNull(
-        context.getExternalFilesDir(null),
-        context.filesDir,
-        File(context.filesDir, "context"),
-        File(context.getExternalFilesDir(null)?.path ?: return listOf(context.filesDir), "captures"),
-        File(context.getExternalFilesDir(null)?.path ?: return listOf(context.filesDir), "inbox"),
-    ).distinct()
+    private fun ownRoots(context: Context): List<File> {
+        val external = context.getExternalFilesDir(null)
+        return listOfNotNull(
+            external,
+            context.filesDir,
+            File(context.filesDir, "context"),
+            external?.let { File(it, "captures") },
+            external?.let { File(it, "inbox") },
+        ).distinct()
+    }
 
     fun search(context: Context, query: String, ext: String?, limit: Int): FileWalk.Result {
         val cap = limit.coerceIn(1, 100)
