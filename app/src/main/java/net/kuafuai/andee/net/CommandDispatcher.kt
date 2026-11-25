@@ -1771,6 +1771,7 @@ class CommandDispatcher(
                             android.content.Intent.FLAG_ACTIVITY_NEW_TASK,
                     )
                     clipData = android.content.ClipData.newUri(appContext.contentResolver, "file", uri)
+                    setDataAndType(uri, mime)
                 }
                 val infos = appContext.packageManager.queryIntentActivities(intent, 0)
                     .filter { it.activityInfo.packageName != appContext.packageName }
