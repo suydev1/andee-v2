@@ -270,6 +270,22 @@ class CommandDispatcher(
         }
 
     /**
+     * Roots `file.open` may read from. Opening is not writing, so this always
+     * includes Andee's own folders and never refuses PICKED scope; the MANAGED
+     * external root is added only when it has actually been granted.
+     */
+    private fun fileOpenRoots(): List<java.io.File> {
+        val own = listOfNotNull(appContext.getExternalFilesDir(null), appContext.filesDir)
+        val managed = net.kuafuai.andee.device.StorageSearch.scope(appContext) ==
+            net.kuafuai.andee.device.StorageSearch.Scope.MANAGED
+        return if (managed) {
+            own + android.os.Environment.getExternalStorageDirectory()
+        } else {
+            own
+        }
+    }
+
+    /**
      * Raw handles — file paths, content URIs and drop-inbox ids — that a search
      * tool actually returned this session.
      *
@@ -314,6 +330,11 @@ class CommandDispatcher(
             return true
         }
     }
+
+    /** A model-supplied handle with any fence markers removed, or null when blank. */
+    private fun handleParam(params: JSONObject?, key: String): String? =
+        net.kuafuai.andee.net.ToolDataFence.strip(params?.optString(key).orEmpty()).trim()
+            .takeIf { it.isNotBlank() }
 
     private fun requireFileEdits() {
         check(VoiceConfig.fileEditsEnabled(appContext)) {
@@ -1740,7 +1761,7 @@ class CommandDispatcher(
             }
 
             "note.drop_read" -> {
-                val id = requireNotNull(params?.optString("id")?.trim()?.ifEmpty { null }) {
+                val id = requireNotNull(handleParam(params, "id")) {
                     "note.drop_read requires id"
                 }
                 val got = dropInbox().read(id)
@@ -1818,13 +1839,16 @@ class CommandDispatcher(
                 // A content URI is a handle whichever field it arrived in.
                 val contentUri = uriText.takeIf { it.startsWith("content://") }
                     ?: path.takeIf { it.startsWith("content://") }
-                val provided = listOf(path, uriText, id).filter { it.isNotEmpty() }
-                if (provided.isEmpty()) {
+                if (path.isEmpty() && uriText.isEmpty() && id.isEmpty()) {
                     throw IllegalArgumentException(
                         "file.open needs a path, uri or id that file.search or list_drop_files returned.",
                     )
                 }
-                if (provided.any { !isOpenedHandle(it) }) {
+                // Paths and picker URIs must be handles this session returned.
+                // A drop-inbox id is not registry-gated: the inbox card submits it
+                // directly, so the inbox itself is the source of truth.
+                val supplied = listOf(path, uriText).filter { it.isNotEmpty() }
+                if (supplied.any { !isOpenedHandle(it) }) {
                     throw IllegalArgumentException(
                         "That handle did not come from file.search or list_drop_files this session. " +
                             "Search first and open a path, uri or id from the result; never invent one.",
@@ -1832,7 +1856,7 @@ class CommandDispatcher(
                 }
                 val file = when {
                     contentUri == null && path.isNotEmpty() ->
-                        net.kuafuai.andee.device.FileManager.resolve(writableRoots(), path)
+                        net.kuafuai.andee.device.FileManager.resolve(fileOpenRoots(), path)
                     contentUri == null && id.isNotEmpty() ->
                         dropInbox().scan().firstOrNull { it.id == id }
                             ?.let { java.io.File(dropInbox().path(), it.name) }
@@ -1887,29 +1911,29 @@ class CommandDispatcher(
                 val done = when (method) {
                     "file.write" -> m.write(
                         roots,
-                        requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.write requires path" },
+                        requireNotNull(handleParam(params, "path")) { "file.write requires path" },
                         params?.optString("text").orEmpty(), backups, cap,
                     )
                     "file.edit" -> m.edit(
                         roots,
-                        requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.edit requires path" },
+                        requireNotNull(handleParam(params, "path")) { "file.edit requires path" },
                         requireNotNull(params?.optString("old")?.takeIf { it.isNotEmpty() }) { "file.edit requires old" },
                         params?.optString("new").orEmpty(),
                         params?.optBoolean("replace_all", false) == true, backups, cap,
                     )
                     "file.mkdir" -> m.mkdir(
                         roots,
-                        requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.mkdir requires path" },
+                        requireNotNull(handleParam(params, "path")) { "file.mkdir requires path" },
                     )
                     "file.move" -> m.move(
                         roots,
-                        requireNotNull(params?.optString("from")?.takeIf { it.isNotBlank() }) { "file.move requires from" },
-                        requireNotNull(params?.optString("to")?.takeIf { it.isNotBlank() }) { "file.move requires to" },
+                        requireNotNull(handleParam(params, "from")) { "file.move requires from" },
+                        requireNotNull(handleParam(params, "to")) { "file.move requires to" },
                         params?.optBoolean("overwrite", false) == true,
                     )
                     else -> m.delete(
                         roots,
-                        requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.delete requires path" },
+                        requireNotNull(handleParam(params, "path")) { "file.delete requires path" },
                         params?.optBoolean("recursive", false) == true,
                         params?.optBoolean("confirm", false) == true,
                     )

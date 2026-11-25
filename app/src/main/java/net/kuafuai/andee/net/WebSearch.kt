@@ -24,9 +24,12 @@ object WebSearch {
     private const val SEARCH_BUDGET_MS = 25_000L
     private val json = "application/json; charset=utf-8".toMediaType()
 
-    private fun clientFor(timeoutMs: Long): OkHttpClient = OkHttpClient.Builder()
+    private val baseClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    private fun clientFor(timeoutMs: Long): OkHttpClient = baseClient.newBuilder()
         .callTimeout(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
         .build()
 
