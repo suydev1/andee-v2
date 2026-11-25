@@ -19,11 +19,13 @@ class WebSearchParseTest {
         assertEquals("snippet", r.results[0].content)
         assertEquals("2026-01-01", r.results[0].published)
         assertEquals(1, r.credits)
+        assertEquals("tavily", r.source)
     }
 
     @Test fun `a result without a date stays blank`() {
         val r = WebSearch.parse("""{"results":[{"title":"B","url":"u","content":"c"}]}""")
         assertEquals("", r.results.single().published)
         assertTrue(r.results.single().content.isNotBlank())
+        assertEquals("tavily", r.source)
     }
 }

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 object WebSearch {
     data class Result(val title: String, val url: String, val content: String, val published: String)
-    data class Response(val results: List<Result>, val credits: Int?)
+    data class Response(val results: List<Result>, val credits: Int?, val source: String)
 
     private const val URL = "https://api.tavily.com/search"
     private val client = OkHttpClient.Builder()
@@ -34,18 +34,16 @@ object WebSearch {
             )
         }
         val credits = runCatching { o.getJSONObject("usage").optInt("credits") }.getOrNull()
-        return Response(out, credits)
+        return Response(out, credits, "tavily")
     }
 
-    fun search(
-        context: Context, query: String, maxResults: Int = 5,
-        topic: String = "general", timeRange: String? = null,
+    private fun tavily(
+        key: String, query: String, max: Int,
+        topic: String, timeRange: String?,
     ): Response {
-        val key = VoiceConfig.tavilyKey(context)
-        check(key.isNotBlank()) { "No web search key is set. Add one in Settings → Web search." }
         val body = JSONObject()
             .put("query", query)
-            .put("max_results", maxResults.coerceIn(1, 10))
+            .put("max_results", max.coerceIn(1, 10))
             .put("topic", if (topic == "news") "news" else "general")
             .put("include_answer", false)
             .put("include_raw_content", false)
@@ -61,9 +59,32 @@ object WebSearch {
             when (res.code) {
                 401, 403 -> throw IllegalStateException("The web search key was rejected. Check it in Settings.")
                 429 -> throw IllegalStateException("Web search is rate limited. Try again in a minute.")
-                in 200..299 -> return parse(raw)
+                in 200..299 -> return parse(raw).copy(source = "tavily")
                 else -> throw IllegalStateException("Web search failed (${res.code}).")
             }
         }
+    }
+
+    fun search(
+        context: Context, query: String, maxResults: Int = 5,
+        topic: String = "general", timeRange: String? = null,
+    ): Response {
+        val n = maxResults.coerceIn(1, 10)
+        var keyError: Exception? = null
+        val key = VoiceConfig.tavilyKey(context)
+        if (key.isNotBlank()) {
+            try {
+                val r = tavily(key, query, n, topic, timeRange)
+                return r.copy(source = "tavily")
+            } catch (e: Exception) {
+                keyError = e
+            }
+        }
+        val ddg = FreeSearch.ddg(query, n)
+        if (ddg.isNotEmpty()) return Response(ddg, null, "duckduckgo")
+        val wiki = FreeSearch.wikipedia(query, n)
+        if (wiki.isNotEmpty()) return Response(wiki, null, "wikipedia")
+        if (keyError != null) throw keyError
+        return Response(emptyList(), null, "none")
     }
 }
