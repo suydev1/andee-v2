@@ -8,9 +8,10 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 object FreeSearch {
-    private val client = OkHttpClient.Builder()
+    private fun clientFor(timeoutMs: Long): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
         .build()
 
     private fun strip(html: String): String = html
@@ -54,17 +55,27 @@ object FreeSearch {
         return out
     }
 
-    private fun get(url: String): String = Request.Builder()
-        .url(url).header("User-Agent", "Andee/1.0 (on-device assistant)")
-        .build().let { req -> client.newCall(req).execute().use { it.body?.string().orEmpty() } }
+    private fun get(url: String, timeoutMs: Long): String = clientFor(timeoutMs).newCall(
+        Request.Builder()
+            .url(url).header("User-Agent", "Andee/1.0 (on-device assistant)")
+            .build(),
+    ).execute().use { res ->
+        check(res.isSuccessful) { "Search endpoint answered ${res.code}." }
+        res.body?.string().orEmpty()
+    }
 
-    fun ddg(query: String, max: Int): List<WebSearch.Result> = runCatching {
+    fun ddg(query: String, max: Int, timeoutMs: Long): List<WebSearch.Result> = runCatching {
         val q = URLEncoder.encode(query, "UTF-8")
-        parseDdg(get("https://html.duckduckgo.com/html/?q=$q")).take(max)
+        parseDdg(get("https://html.duckduckgo.com/html/?q=$q", timeoutMs)).take(max)
     }.getOrDefault(emptyList())
 
-    fun wikipedia(query: String, max: Int): List<WebSearch.Result> = runCatching {
+    fun wikipedia(query: String, max: Int, timeoutMs: Long): List<WebSearch.Result> = runCatching {
         val q = URLEncoder.encode(query, "UTF-8")
-        parseWikipedia(get("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=$max&srsearch=$q"))
+        parseWikipedia(
+            get(
+                "https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=$max&srsearch=$q",
+                timeoutMs,
+            ),
+        )
     }.getOrDefault(emptyList())
 }

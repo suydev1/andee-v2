@@ -250,14 +250,69 @@ class CommandDispatcher(
     private fun requireScreen(): ScreenController =
         screenOrNull() ?: throw IllegalStateException(SCREEN_UNAVAILABLE)
 
-    private fun writableRoot(): java.io.File = when (net.kuafuai.andee.device.StorageSearch.scope(appContext)) {
-        net.kuafuai.andee.device.StorageSearch.Scope.MANAGED ->
-            android.os.Environment.getExternalStorageDirectory()
-        net.kuafuai.andee.device.StorageSearch.Scope.OWN ->
-            appContext.getExternalFilesDir(null) ?: appContext.filesDir
-        net.kuafuai.andee.device.StorageSearch.Scope.PICKED -> throw IllegalStateException(
-            "Picked folders can be searched but not edited in this build. Grant full storage access to edit files.",
-        )
+    /**
+     * Every directory a file write may land in.
+     *
+     * The search side walks [net.kuafuai.andee.device.StorageSearch]'s own
+     * roots, which include `filesDir`, so the write side has to accept the same
+     * set — otherwise a file the device just found under `filesDir` could not
+     * be edited. [net.kuafuai.andee.device.FileManager] checks every entry.
+     */
+    private fun writableRoots(): List<java.io.File> =
+        when (net.kuafuai.andee.device.StorageSearch.scope(appContext)) {
+            net.kuafuai.andee.device.StorageSearch.Scope.MANAGED ->
+                listOf(android.os.Environment.getExternalStorageDirectory())
+            net.kuafuai.andee.device.StorageSearch.Scope.OWN ->
+                listOfNotNull(appContext.getExternalFilesDir(null), appContext.filesDir)
+            net.kuafuai.andee.device.StorageSearch.Scope.PICKED -> throw IllegalStateException(
+                "Picked folders can be searched but not edited in this build. Grant full storage access to edit files.",
+            )
+        }
+
+    /**
+     * Raw handles — file paths, content URIs and drop-inbox ids — that a search
+     * tool actually returned this session.
+     *
+     * `file.open` hands a URI to another app with a read grant, so a handle the
+     * model invented must never become a grant. Only values returned by
+     * `file.search` or `note.drop_list` are remembered, and only for
+     * [HANDLE_TTL_MS]; past [HANDLE_MAX] entries the oldest is dropped. A plain
+     * `LinkedHashMap` is enough because every access is synchronized.
+     */
+    private val openedHandles = java.util.LinkedHashMap<String, Long>()
+    private val openedHandlesLock = Any()
+
+    private fun rememberHandle(raw: String?) {
+        val value = raw?.trim().orEmpty()
+        if (value.isEmpty()) return
+        synchronized(openedHandlesLock) {
+            val now = System.currentTimeMillis()
+            val expired = openedHandles.entries.iterator()
+            while (expired.hasNext()) {
+                if (now - expired.next().value > HANDLE_TTL_MS) expired.remove()
+            }
+            openedHandles.remove(value)
+            openedHandles[value] = now
+            while (openedHandles.size > HANDLE_MAX) {
+                val oldest = openedHandles.entries.iterator()
+                if (!oldest.hasNext()) break
+                oldest.next()
+                oldest.remove()
+            }
+        }
+    }
+
+    private fun isOpenedHandle(raw: String?): Boolean {
+        val value = raw?.trim().orEmpty()
+        if (value.isEmpty()) return false
+        synchronized(openedHandlesLock) {
+            val at = openedHandles[value] ?: return false
+            if (System.currentTimeMillis() - at > HANDLE_TTL_MS) {
+                openedHandles.remove(value)
+                return false
+            }
+            return true
+        }
     }
 
     private fun requireFileEdits() {
@@ -1661,17 +1716,23 @@ class CommandDispatcher(
 
             "note.drop_list" -> {
                 val items = dropInbox().scan()
+                val inbox = dropInbox().path()
                 val arr = org.json.JSONArray()
-                for (i in items) arr.put(
-                    JSONObject()
-                        .put("id", i.id)
-                        .put("name", i.name)
-                        .put("size", i.size)
-                        .put("added", i.addedAt)
-                        .put("read", i.readAt)
-                        .put("status", i.status.name)
-                        .put("path", java.io.File(dropInbox().path(), i.name).absolutePath),
-                )
+                for (i in items) {
+                    val path = java.io.File(inbox, i.name).absolutePath
+                    rememberHandle(path)
+                    rememberHandle(i.id)
+                    arr.put(
+                        JSONObject()
+                            .put("id", net.kuafuai.andee.net.ToolDataFence.wrap("DROP ID", i.id))
+                            .put("name", net.kuafuai.andee.net.ToolDataFence.wrap("DROP NAME", i.name))
+                            .put("size", i.size)
+                            .put("added", i.addedAt)
+                            .put("read", i.readAt)
+                            .put("status", i.status.name)
+                            .put("path", net.kuafuai.andee.net.ToolDataFence.wrap("DROP PATH", path)),
+                    )
+                }
                 JSONObject()
                     .put("items", arr)
                     .put("count", arr.length())
@@ -1707,8 +1768,10 @@ class CommandDispatcher(
                 val arr = org.json.JSONArray()
                 for (x in r.results) arr.put(
                     JSONObject()
-                        .put("title", x.title).put("url", x.url)
-                        .put("snippet", x.content).put("published", x.published),
+                        .put("title", net.kuafuai.andee.net.ToolDataFence.wrap("WEB TITLE", x.title))
+                        .put("url", net.kuafuai.andee.net.ToolDataFence.wrap("WEB URL", x.url))
+                        .put("snippet", net.kuafuai.andee.net.ToolDataFence.wrap("WEB SNIPPET", x.content))
+                        .put("published", net.kuafuai.andee.net.ToolDataFence.wrap("WEB DATE", x.published)),
                 )
                 JSONObject()
                     .put("results", arr)
@@ -1730,12 +1793,17 @@ class CommandDispatcher(
                     params?.optInt("limit", 20) ?: 20,
                 )
                 val arr = org.json.JSONArray()
-                for (h in r.hits) arr.put(
-                    JSONObject()
-                        .put("name", h.name).put("path", h.path)
-                        .put("uri", h.uri).put("size", h.size)
-                        .put("modified", h.modified).put("mime", h.mime),
-                )
+                for (h in r.hits) {
+                    rememberHandle(h.path)
+                    rememberHandle(h.uri)
+                    arr.put(
+                        JSONObject()
+                            .put("name", net.kuafuai.andee.net.ToolDataFence.wrap("FILE NAME", h.name))
+                            .put("path", net.kuafuai.andee.net.ToolDataFence.wrap("FILE PATH", h.path))
+                            .put("uri", h.uri).put("size", h.size)
+                            .put("modified", h.modified).put("mime", h.mime),
+                    )
+                }
                 JSONObject()
                     .put("files", arr).put("count", arr.length())
                     .put("partial", r.partial)
@@ -1744,18 +1812,37 @@ class CommandDispatcher(
             }
 
             "file.open" -> {
-                val path = params?.optString("path")?.trim().orEmpty()
-                val uriText = params?.optString("uri")?.trim().orEmpty()
-                val id = params?.optString("id")?.trim().orEmpty()
-                val file = if (path.isNotEmpty()) java.io.File(path) else if (id.isNotEmpty()) {
-                    dropInbox().scan().firstOrNull { it.id == id }
-                        ?.let { java.io.File(dropInbox().path(), it.name) }
-                        ?: throw IllegalArgumentException("No drop file has that id.")
-                } else null
+                val path = net.kuafuai.andee.net.ToolDataFence.strip(params?.optString("path").orEmpty()).trim()
+                val uriText = net.kuafuai.andee.net.ToolDataFence.strip(params?.optString("uri").orEmpty()).trim()
+                val id = net.kuafuai.andee.net.ToolDataFence.strip(params?.optString("id").orEmpty()).trim()
+                // A content URI is a handle whichever field it arrived in.
+                val contentUri = uriText.takeIf { it.startsWith("content://") }
+                    ?: path.takeIf { it.startsWith("content://") }
+                val provided = listOf(path, uriText, id).filter { it.isNotEmpty() }
+                if (provided.isEmpty()) {
+                    throw IllegalArgumentException(
+                        "file.open needs a path, uri or id that file.search or list_drop_files returned.",
+                    )
+                }
+                if (provided.any { !isOpenedHandle(it) }) {
+                    throw IllegalArgumentException(
+                        "That handle did not come from file.search or list_drop_files this session. " +
+                            "Search first and open a path, uri or id from the result; never invent one.",
+                    )
+                }
+                val file = when {
+                    contentUri == null && path.isNotEmpty() ->
+                        net.kuafuai.andee.device.FileManager.resolve(writableRoots(), path)
+                    contentUri == null && id.isNotEmpty() ->
+                        dropInbox().scan().firstOrNull { it.id == id }
+                            ?.let { java.io.File(dropInbox().path(), it.name) }
+                            ?: throw IllegalArgumentException("No drop file has that id.")
+                    else -> null
+                }
                 val uri: android.net.Uri
                 val mime: String
-                if (uriText.startsWith("content://")) {
-                    uri = android.net.Uri.parse(uriText)
+                if (contentUri != null) {
+                    uri = android.net.Uri.parse(contentUri)
                     mime = params?.optString("mime")?.ifEmpty { null }
                         ?: net.kuafuai.andee.device.FileWalk.mime(uri.lastPathSegment.orEmpty())
                 } else {
@@ -1793,35 +1880,35 @@ class CommandDispatcher(
 
             "file.write", "file.edit", "file.mkdir", "file.move", "file.delete" -> {
                 requireFileEdits()
-                val root = writableRoot()
+                val roots = writableRoots()
                 val backups = java.io.File(appContext.filesDir, "file-backups")
                 val cap = VoiceConfig.dropMaxBytes(appContext)
                 val m = net.kuafuai.andee.device.FileManager
                 val done = when (method) {
                     "file.write" -> m.write(
-                        root,
+                        roots,
                         requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.write requires path" },
                         params?.optString("text").orEmpty(), backups, cap,
                     )
                     "file.edit" -> m.edit(
-                        root,
+                        roots,
                         requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.edit requires path" },
                         requireNotNull(params?.optString("old")?.takeIf { it.isNotEmpty() }) { "file.edit requires old" },
                         params?.optString("new").orEmpty(),
                         params?.optBoolean("replace_all", false) == true, backups, cap,
                     )
                     "file.mkdir" -> m.mkdir(
-                        root,
+                        roots,
                         requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.mkdir requires path" },
                     )
                     "file.move" -> m.move(
-                        root,
+                        roots,
                         requireNotNull(params?.optString("from")?.takeIf { it.isNotBlank() }) { "file.move requires from" },
                         requireNotNull(params?.optString("to")?.takeIf { it.isNotBlank() }) { "file.move requires to" },
                         params?.optBoolean("overwrite", false) == true,
                     )
                     else -> m.delete(
-                        root,
+                        roots,
                         requireNotNull(params?.optString("path")?.takeIf { it.isNotBlank() }) { "file.delete requires path" },
                         params?.optBoolean("recursive", false) == true,
                         params?.optBoolean("confirm", false) == true,
@@ -3695,6 +3782,10 @@ class CommandDispatcher(
 
         /** WeChat's package — the one app that must not be operated from the phone. See [WECHAT_WRITE_METHODS]. */
         const val WECHAT_PKG = "com.tencent.mm"
+
+        /** How long a handle returned by a search stays openable, and how many are kept. */
+        const val HANDLE_TTL_MS = 10 * 60 * 1000L
+        const val HANDLE_MAX = 200
 
         /**
          * The write methods refused when WeChat is in front, and why they and not the reads.
