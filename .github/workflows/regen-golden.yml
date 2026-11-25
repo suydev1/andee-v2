@@ -1,0 +1,36 @@
+name: regen golden
+
+on:
+  workflow_dispatch:
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Enable golden update
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/test/java/net/kuafuai/andee/golden/GoldenTextTest.kt')
+          s = p.read_text()
+          old = 'private val update = System.getProperty("golden.update") == "true"'
+          assert old in s
+          p.write_text(s.replace(old, 'private val update = true'))
+          PY
+
+      - name: Regenerate golden snapshots
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: golden-regenerated
+          path: app/src/test/resources/golden/
