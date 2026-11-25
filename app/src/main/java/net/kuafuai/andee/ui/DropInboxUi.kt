@@ -93,12 +93,12 @@ class DropInboxUi(
         }
         val titles = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(context).apply {
-            text = "收件箱"
+            text = "Inbox"
             textSize = Glass.Type.HEADLINE
             setTextColor(Color.parseColor(Glass.TITLE))
         })
         titles.addView(TextView(context).apply {
-            text = "你放进去的东西，Andee 只在你叫它读时才读"
+            text = "Anything you put here, Andee only reads when you ask it to"
             textSize = Glass.Type.CAPTION
             setTextColor(Color.parseColor(Glass.SECONDARY))
         })
@@ -136,7 +136,7 @@ class DropInboxUi(
             background = Glass.well(context, dp(10))
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        footer.addView(button("从文件应用添加", filled = false) {
+        footer.addView(button("Add from Files", filled = false) {
             context.startActivity(
                 Intent(context, DropPickerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
@@ -150,7 +150,7 @@ class DropInboxUi(
         host.removeAllViews()
         if (found.isEmpty()) {
             host.addView(TextView(context).apply {
-                text = "还没有文件。把文件放进上面的文件夹，或从文件应用添加。"
+                text = "No files yet. Put a file in the folder above, or add one from Files."
                 textSize = Glass.Type.CAPTION
                 setTextColor(Color.parseColor(Glass.MUTED))
                 setPadding(0, dp(12), 0, dp(12))
@@ -174,7 +174,7 @@ class DropInboxUi(
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             line.addView(TextView(context).apply {
-                text = if (item.readAt != null) "已读" else DropInbox.label(item.status)
+                text = if (item.readAt != null) "Read" else DropInbox.label(item.status)
                 textSize = Glass.Type.CAPTION
                 setTextColor(Color.parseColor(if (item.readAt != null) Glass.OK else Glass.ACCENT))
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -192,16 +192,16 @@ class DropInboxUi(
                     setPadding(0, dp(8), 0, 0)
                     visibility = View.GONE
                 }
-                detail.addView(button("让 Andee 看", filled = true) {
+                detail.addView(button("Let Andee look", filled = true) {
                     // Both values carry the file's own words: the id is
                     // "<sha>:<name>". Fence them together, or a hostile name
                     // leaks through the id into the hub's copy of this turn.
                     // The latch in BodyCoreService is the half that holds if
                     // the model is talked out of the fence.
-                    val data = "文件名：${item.name}\n文件 id：${item.id}"
+                    val data = "File name: ${item.name}\nFile id: ${item.id}"
                         .replace(DropFence.OPEN, "")
                         .replace(DropFence.CLOSE, "")
-                    onSubmit("看看收件箱里的 ${DropFence.wrap(data)}")
+                    onSubmit("Look at this in the inbox: ${DropFence.wrap(data)}")
                     hide()
                 })
                 row.addView(detail)
