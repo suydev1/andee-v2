@@ -18,7 +18,21 @@ object TypingStateGuard {
         val stale: Boolean get() = typingTop > 0 || away
     }
 
-    /** Forget the borrowed geometry and the picker veil once no field owns them. */
-    fun reconcile(state: State, showing: Boolean, picking: Boolean): State =
-        if (!showing && !picking && state.stale) State() else state
+    /**
+     * Forget the borrowed geometry and the picker veil once no field owns them.
+     *
+     * `typingTop` and `away` are one unit, never two independent flags. A non-zero `typingTop` resizes the
+     * overlay and leaves it `FLAG_NOT_TOUCHABLE`; `away = true` makes it alpha 0. Clearing either alone leaves
+     * an invisible, untouchable card with no way for the user to tap it — so every reset below is `State()`.
+     *
+     * The picker is checked first, and it wins even when the field reports itself off-screen: a genuine picker
+     * pauses the field (`showing = false, picking = true`) and the card must stay out of that app's way. Once
+     * the field says the picker is gone, any leftover geometry or veil is stale and both go together.
+     */
+    fun reconcile(state: State, showing: Boolean, picking: Boolean): State = when {
+        picking -> state
+        !showing -> State()
+        state.stale -> State()
+        else -> state
+    }
 }

@@ -15,6 +15,7 @@ import android.media.ThumbnailUtils
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.text.InputType
 import android.util.Base64
@@ -114,17 +115,21 @@ class TextInputActivity : Activity() {
     /** Whether the card should follow the strip's top edge right now. */
     private var trackTop = false
 
+    /** The card has already been given the strip's edge before the IME arrived. */
+    private var topReportedWithoutIme = false
+
     /** The keyboard is sliding; [onProgress] owns the strip's position and the card's edge until it stops. */
     private var sliding = false
+
+    /**
+     * One bounded burst of IME requests. An animation cancelled before the keyboard draws leaves no inset and
+     * no signal to retry, so ask again on a short schedule instead of once. Focus is re-requested on every
+     * attempt: ColorOS hands it back to Launcher mid-animation, and `showSoftInput` on an unfocused field is
+     * ignored.
+     */
     private var keyboardRequested = false
-    private val keyboardRetry = Runnable {
-        val visible = ViewCompat.getRootWindowInsets(field)
-            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        if (resumed && !isFinishing && !picking && hasWindowFocus() && field.hasFocus() && !visible) {
-            (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-                .showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
+    private var keyboardAttempt = 0
+    private val keyboardRetry = Runnable { keyboardTick() }
 
     /**
      * The user is in the camera, the photo picker or the permission dialog.
@@ -132,6 +137,9 @@ class TextInputActivity : Activity() {
      * both expected, and neither may close the field.
      */
     @Volatile private var picking = false
+
+    /** When [goAway] set [picking], so a picker that never returns can be timed out. */
+    @Volatile private var pickingAt = 0L
 
     /** Where the system camera was told to write. */
     private var shotFile: File? = null
@@ -331,9 +339,21 @@ class TextInputActivity : Activity() {
                 if (!sliding) scheduleCloseWhenGone()
                 return@setOnApplyWindowInsetsListener insets
             }
-            // Before the keyboard has ever arrived the strip sits at the very bottom, under the card's own
-            // identical pill. Telling the card to end there would only make it jump twice.
-            if (!imeShown) return@setOnApplyWindowInsetsListener insets
+            // The card steps aside from the strip whether or not the keyboard ever arrives. On this ROM the
+            // IME show animation can be cancelled with a 0 inset forever, and a card covering the field keeps
+            // the person from tapping it. Report the edge once, posted so the strip has a position by then;
+            // [reportTop] refuses to report before layout, so no bogus top is ever published.
+            if (!imeShown) {
+                if (!topReportedWithoutIme) {
+                    root.post {
+                        if (strip.height > 0) {
+                            topReportedWithoutIme = true
+                            reportTop()
+                        }
+                    }
+                }
+                return@setOnApplyWindowInsetsListener insets
+            }
             if (sliding) {
                 // This listener sees where the keyboard will *end* before it starts moving. The card takes that
                 // edge once, now — resizing an overlay every frame is a relayout of the whole card per frame,
@@ -422,7 +442,9 @@ class TextInputActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && ::field.isInitialized) showKeyboard()
+        // Focus churns back to Launcher while the IME animation is cancelled.
+        // When it returns, ask again for as long as our field still owns focus.
+        if (hasFocus && ::field.isInitialized && field.hasFocus()) showKeyboard()
     }
 
     override fun onPause() {
@@ -433,18 +455,21 @@ class TextInputActivity : Activity() {
         // field was still showing made the next ⌨ tap a *close*: the user taps
         // the button, and nothing at all happens.
         resumed = false
-        field.removeCallbacks(keyboardRetry)
+        cancelKeyboardRetries()
         super.onPause()
     }
 
     /** What `noHistory` used to do, minus the trips this field sends the user on. */
     override fun onStop() {
         super.onStop()
-        if (!picking && !isFinishing) finish()
+        if (isFinishing) return
+        // A picker that never returns a result used to hold the field alive forever. Inside the deadline its
+        // absence is expected; past it the field is authoritative and closes so the card can be restored.
+        if (!picking || SystemClock.elapsedRealtime() - pickingAt >= PICK_DEADLINE_MS) finish()
     }
 
     override fun onDestroy() {
-        if (::field.isInitialized) field.removeCallbacks(keyboardRetry)
+        cancelKeyboardRetries()
         cancelCloseWhenGone()
         worker.shutdownNow()
         shotFile?.delete()
@@ -532,12 +557,14 @@ class TextInputActivity : Activity() {
 
     private fun goAway() {
         picking = true
+        pickingAt = SystemClock.elapsedRealtime()
         cancelCloseWhenGone()
         onAway?.invoke(true)
     }
 
     private fun comeBack() {
         picking = false
+        pickingAt = 0L
         onAway?.invoke(false)
     }
 
@@ -694,7 +721,7 @@ class TextInputActivity : Activity() {
     }
 
     private fun reportTop() {
-        if (isFinishing) return
+        if (isFinishing || strip.height <= 0) return
         val at = IntArray(2)
         strip.getLocationOnScreen(at)
         onTop?.invoke(at[1])
@@ -735,12 +762,46 @@ class TextInputActivity : Activity() {
         @Suppress("DEPRECATION") overridePendingTransition(0, 0)
     }
 
+    /** (Re)arm the bounded request burst. Called on resume and on window focus. */
     private fun showKeyboard() {
-        if (!resumed || isFinishing || picking || !hasWindowFocus() || keyboardRequested) return
+        if (!resumed || isFinishing || picking || keyboardRequested) return
+        if (!field.hasFocus()) field.requestFocus()
         keyboardRequested = true
+        keyboardAttempt = 0
+        keyboardTick()
+    }
+
+    /** One attempt, then the next from [KEYBOARD_RETRY_DELAYS] while the IME is still down. */
+    private fun keyboardTick() {
+        if (!resumed || isFinishing || picking || !field.hasFocus()) {
+            cancelKeyboardRetries()
+            return
+        }
+        val visible = ViewCompat.getRootWindowInsets(field)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (visible) {
+            cancelKeyboardRetries()
+            return
+        }
+        field.requestFocus()
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-            .showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
-        field.postDelayed(keyboardRetry, IME_RETRY_MS)
+            .showSoftInput(field, InputMethodManager.SHOW_EXPLICIT)
+        if (keyboardAttempt >= KEYBOARD_RETRY_DELAYS.lastIndex) {
+            keyboardRequested = false
+            return
+        }
+        val next = keyboardAttempt + 1
+        keyboardAttempt = next
+        field.postDelayed(
+            keyboardRetry,
+            KEYBOARD_RETRY_DELAYS[next] - KEYBOARD_RETRY_DELAYS[next - 1],
+        )
+    }
+
+    private fun cancelKeyboardRetries() {
+        if (::field.isInitialized) field.removeCallbacks(keyboardRetry)
+        keyboardRequested = false
+        keyboardAttempt = 0
     }
 
     private fun hideKeyboard() {
@@ -783,7 +844,14 @@ class TextInputActivity : Activity() {
 
     companion object {
         private const val TAG = "Body"
-        private const val IME_RETRY_MS = 250L
+        /**
+         * Bounded IME request schedule, milliseconds from the start of a burst:
+         * immediately, then again after 250 / 600 / 1200 ms. Four tries, never a loop.
+         */
+        private val KEYBOARD_RETRY_DELAYS = longArrayOf(0L, 250L, 600L, 1_200L)
+
+        /** How long a picker that never returns may keep the card veiled. */
+        private const val PICK_DEADLINE_MS = 30_000L
         private const val MAX_PHOTOS = 6
         private const val PHOTO_LONG_SIDE = 1280
         private const val JPEG_QUALITY = 85
@@ -849,7 +917,10 @@ class TextInputActivity : Activity() {
         val isShowing: Boolean get() = resumed && live?.get() != null
 
         /** True while the field has handed the screen to a camera or photo picker. */
-        val isPicking: Boolean get() = live?.get()?.picking == true
+        val isPicking: Boolean
+            get() = live?.get()?.let {
+                it.picking && SystemClock.elapsedRealtime() - it.pickingAt < PICK_DEADLINE_MS
+            } == true
 
         /**
          * Open it. `NEW_TASK` because this comes from a service, and `SINGLE_TOP`
