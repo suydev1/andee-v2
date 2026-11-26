@@ -57,7 +57,10 @@ data class Memory(
  * See the Android `Notebook` for the history and the reasoning behind each
  * rule; this is the same code with the storage taken out.
  */
-class NotebookBook(private val store: NotebookStore) {
+class NotebookBook(
+    private val store: NotebookStore,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
 
     private val TAG = "Body"
 
@@ -185,7 +188,7 @@ class NotebookBook(private val store: NotebookStore) {
      * pruned. Fall back to when it was created.
      */
     private fun prune(b: JSONObject) {
-        val cutoff = System.currentTimeMillis() - DONE_TODO_TTL_MS
+        val cutoff = clock() - DONE_TODO_TTL_MS
         val kept = JSONArray()
         val closed = mutableListOf<Pair<Long, JSONObject>>()
         val todos = b.optJSONArray("todos") ?: JSONArray()

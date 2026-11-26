@@ -23,7 +23,7 @@ class PlansTest {
         override fun read() = s
         override fun write(plain: String): Boolean { s = plain; return true }
         override fun wipe() { s = null }
-    })
+    }, { now })
     private val plans = Plans(book, { now }, zone)
     private val nudges = NudgeBook { now }
 
