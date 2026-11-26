@@ -14,6 +14,16 @@ package net.kuafuai.andee.ui
  */
 object TypingStateGuard {
 
+    /** How long a picker may own the veil after the field hands the screen over. */
+    const val PICKER_DEADLINE_MS = 30_000L
+
+    /**
+     * Whether a picker that started at [pickingAt] has run out its deadline. Pure, so the deadline itself is
+     * unit-testable without a device clock; a [pickingAt] of 0 means no picker ever started.
+     */
+    fun pickerExpired(pickingAt: Long, now: Long, deadlineMs: Long = PICKER_DEADLINE_MS): Boolean =
+        pickingAt > 0L && now - pickingAt >= deadlineMs
+
     data class State(val typingTop: Int = 0, val away: Boolean = false) {
         val stale: Boolean get() = typingTop > 0 || away
     }

@@ -43,12 +43,21 @@ class TypingStateGuardTest {
     }
 
     @Test
-    fun expiredPickerIsReportedAsNoPickerAndClearsEverything() {
-        // The deadline lives in TextInputActivity (elapsedRealtime, device dependent). What reaches this pure
-        // guard is the field saying picking = false again after it expires; that must lift both the veil and
-        // the borrowed geometry so FLAG_NOT_TOUCHABLE does not strand the user.
-        val state = TypingStateGuard.State(typingTop = 480, away = true)
-        assertEquals(TypingStateGuard.State(), TypingStateGuard.reconcile(state, showing = false, picking = false))
+    fun pickerDeadlineUsesThePureHelper() {
+        val started = 10_000L
+        val deadline = TypingStateGuard.PICKER_DEADLINE_MS
+        assertFalse(TypingStateGuard.pickerExpired(0L, started + deadline * 2))
+        assertFalse(TypingStateGuard.pickerExpired(started, started + deadline - 1))
+        assertTrue(TypingStateGuard.pickerExpired(started, started + deadline))
+        assertTrue(TypingStateGuard.pickerExpired(started, started + deadline + 1))
+        assertTrue(TypingStateGuard.pickerExpired(started, started + 1_000L, deadlineMs = 1_000L))
+    }
+
+    @Test
+    fun aCleanFieldInThePickerIsUntouched() {
+        val state = TypingStateGuard.State()
+        assertFalse(state.stale)
+        assertEquals(state, TypingStateGuard.reconcile(state, showing = true, picking = true))
     }
 
     @Test

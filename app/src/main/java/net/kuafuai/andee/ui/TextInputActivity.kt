@@ -141,6 +141,15 @@ class TextInputActivity : Activity() {
     /** When [goAway] set [picking], so a picker that never returns can be timed out. */
     @Volatile private var pickingAt = 0L
 
+    /**
+     * The picker backstop. `onStop` arrives the moment the picker opens, so it cannot be the only place that
+     * checks the deadline — something has to be waiting at 30 s.
+     */
+    private var pickerDeadline: Runnable? = null
+
+    /** The person tapped the empty backdrop: done typing; no retry may re-focus the field. */
+    private var userDone = false
+
     /** Where the system camera was told to write. */
     private var shotFile: File? = null
 
@@ -266,6 +275,10 @@ class TextInputActivity : Activity() {
         // keyboard, and the inset listener below already closes the field once
         // the keys are really gone ([scheduleCloseWhenGone]).
         backdrop.setOnClickListener {
+            // Stop the burst first: the next tick re-focuses unconditionally,
+            // which would undo the clearFocus that means "I am done typing".
+            userDone = true
+            cancelKeyboardRetries()
             field.clearFocus()
             hideKeyboard()
         }
@@ -345,12 +358,12 @@ class TextInputActivity : Activity() {
             // [reportTop] refuses to report before layout, so no bogus top is ever published.
             if (!imeShown) {
                 if (!topReportedWithoutIme) {
-                    root.post {
-                        if (strip.height > 0) {
-                            topReportedWithoutIme = true
-                            reportTop()
-                        }
-                    }
+                    topReportedWithoutIme = true
+                    // Keep tracking layout: a photo can be added while the keyboard never arrived, and the
+                    // card has to follow the strip's new edge. Set the guard now so inset passes cannot post
+                    // the same report again before this one runs.
+                    trackTop = true
+                    root.post { reportTop() }
                 }
                 return@setOnApplyWindowInsetsListener insets
             }
@@ -435,6 +448,15 @@ class TextInputActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        // SINGLE_TOP can bring this same instance back after a picker abandoned it. Do not finish here —
+        // that would kill the field the user just reopened — but lift the stale veil so it can show the
+        // keyboard and take focus again.
+        if (picking && TypingStateGuard.pickerExpired(pickingAt, SystemClock.elapsedRealtime())) {
+            cancelPickerDeadline()
+            picking = false
+            pickingAt = 0L
+            onAway?.invoke(false)
+        }
         keyboardRequested = false
         field.requestFocus()
         field.post { showKeyboard() }
@@ -442,9 +464,13 @@ class TextInputActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Focus churns back to Launcher while the IME animation is cancelled.
-        // When it returns, ask again for as long as our field still owns focus.
-        if (hasFocus && ::field.isInitialized && field.hasFocus()) showKeyboard()
+        // ColorOS clears *view* focus mid-animation and hands window focus back to Launcher. Reassert both
+        // here, even when the field reports no focus, and arm a bounded burst. The deliberate backdrop tap
+        // is the one case that must not be undone.
+        if (hasFocus && ::field.isInitialized && !isFinishing && !userDone) {
+            field.requestFocus()
+            showKeyboard()
+        }
     }
 
     override fun onPause() {
@@ -465,11 +491,12 @@ class TextInputActivity : Activity() {
         if (isFinishing) return
         // A picker that never returns a result used to hold the field alive forever. Inside the deadline its
         // absence is expected; past it the field is authoritative and closes so the card can be restored.
-        if (!picking || SystemClock.elapsedRealtime() - pickingAt >= PICK_DEADLINE_MS) finish()
+        if (!picking || TypingStateGuard.pickerExpired(pickingAt, SystemClock.elapsedRealtime())) finish()
     }
 
     override fun onDestroy() {
         cancelKeyboardRetries()
+        cancelPickerDeadline()
         cancelCloseWhenGone()
         worker.shutdownNow()
         shotFile?.delete()
@@ -559,13 +586,36 @@ class TextInputActivity : Activity() {
         picking = true
         pickingAt = SystemClock.elapsedRealtime()
         cancelCloseWhenGone()
+        schedulePickerDeadline()
         onAway?.invoke(true)
     }
 
     private fun comeBack() {
         picking = false
         pickingAt = 0L
+        cancelPickerDeadline()
         onAway?.invoke(false)
+    }
+
+    /** Arm the backstop that ends a picker which never comes back with a result. */
+    private fun schedulePickerDeadline() {
+        cancelPickerDeadline()
+        val r = Runnable {
+            if (!picking || !TypingStateGuard.pickerExpired(pickingAt, SystemClock.elapsedRealtime())) return@Runnable
+            pickerDeadline = null
+            picking = false
+            pickingAt = 0L
+            onAway?.invoke(false)
+            finish()
+        }
+        pickerDeadline = r
+        field.postDelayed(r, TypingStateGuard.PICKER_DEADLINE_MS)
+    }
+
+    private fun cancelPickerDeadline() {
+        val r = pickerDeadline ?: return
+        pickerDeadline = null
+        if (::field.isInitialized) field.removeCallbacks(r)
     }
 
     override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
@@ -764,8 +814,7 @@ class TextInputActivity : Activity() {
 
     /** (Re)arm the bounded request burst. Called on resume and on window focus. */
     private fun showKeyboard() {
-        if (!resumed || isFinishing || picking || keyboardRequested) return
-        if (!field.hasFocus()) field.requestFocus()
+        if (!resumed || isFinishing || picking || userDone || keyboardRequested) return
         keyboardRequested = true
         keyboardAttempt = 0
         keyboardTick()
@@ -773,7 +822,7 @@ class TextInputActivity : Activity() {
 
     /** One attempt, then the next from [KEYBOARD_RETRY_DELAYS] while the IME is still down. */
     private fun keyboardTick() {
-        if (!resumed || isFinishing || picking || !field.hasFocus()) {
+        if (!resumed || isFinishing || picking || userDone) {
             cancelKeyboardRetries()
             return
         }
@@ -783,6 +832,8 @@ class TextInputActivity : Activity() {
             cancelKeyboardRetries()
             return
         }
+        // The whole point: ColorOS clears view focus while cancelling the animation. Never gate the request
+        // on a focus flag that is already broken — reassert focus on every attempt, then ask for the IME.
         field.requestFocus()
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
             .showSoftInput(field, InputMethodManager.SHOW_EXPLICIT)
@@ -850,8 +901,6 @@ class TextInputActivity : Activity() {
          */
         private val KEYBOARD_RETRY_DELAYS = longArrayOf(0L, 250L, 600L, 1_200L)
 
-        /** How long a picker that never returns may keep the card veiled. */
-        private const val PICK_DEADLINE_MS = 30_000L
         private const val MAX_PHOTOS = 6
         private const val PHOTO_LONG_SIDE = 1280
         private const val JPEG_QUALITY = 85
@@ -919,7 +968,7 @@ class TextInputActivity : Activity() {
         /** True while the field has handed the screen to a camera or photo picker. */
         val isPicking: Boolean
             get() = live?.get()?.let {
-                it.picking && SystemClock.elapsedRealtime() - it.pickingAt < PICK_DEADLINE_MS
+                it.picking && !TypingStateGuard.pickerExpired(it.pickingAt, SystemClock.elapsedRealtime())
             } == true
 
         /**
