@@ -641,7 +641,9 @@ class BodyCoreService : Service() {
         // [ensureOverlays], which is what shows this window and unfolds the card.
         // See `SelfCheck.isPageOpen`.
         val pageOwnsScreen = net.kuafuai.andee.device.SelfCheck.isPageOpen(this)
-        if (!pageOwnsScreen && !window.show()) {
+        val overlayShown = if (pageOwnsScreen) false else window.show()
+        android.util.Log.i("Body", "boot overlay pageOpen=$pageOwnsScreen shown=$overlayShown")
+        if (!pageOwnsScreen && !overlayShown) {
             android.util.Log.e("Body", "overlay refused: no window (SYSTEM_ALERT_WINDOW?)")
         }
         // Little signboards (ask/alert cards) live in their own overlay
@@ -3744,6 +3746,11 @@ class BodyCoreService : Service() {
      */
     private val staleTypingRunnable = object : Runnable {
         override fun run() {
+            android.util.Log.i(
+                "Body",
+                "overlay watchdog showing=${net.kuafuai.andee.ui.TextInputActivity.isShowing} " +
+                    "picking=${net.kuafuai.andee.ui.TextInputActivity.isPicking}",
+            )
             window.reconcileTypingState(
                 showing = net.kuafuai.andee.ui.TextInputActivity.isShowing,
                 picking = net.kuafuai.andee.ui.TextInputActivity.isPicking,

@@ -1110,6 +1110,7 @@ class FloatingWindowUi(
      * Main thread only, via the usual post.
      */
     fun setTypingTop(topPx: Int) {
+        android.util.Log.i("Body", "setTypingTop top=$topPx")
         ui.post {
             if (typingTop == topPx) return@post
             typingTop = topPx
@@ -1518,6 +1519,7 @@ class FloatingWindowUi(
      * The overlay is still visible either way — only touch is affected.
      */
     fun setTouchable(touchable: Boolean) {
+        android.util.Log.i("Body", "setTouchable touchable=$touchable")
         ui.post {
             gesturePassthrough = !touchable
             gesturePassthroughUntil = if (touchable) 0L else android.os.SystemClock.uptimeMillis() + TRANSIENT_HOLD_MS
@@ -1557,6 +1559,7 @@ class FloatingWindowUi(
     }
 
     fun setVisibleForCapture(visible: Boolean) {
+        android.util.Log.i("Body", "setVisibleForCapture visible=$visible")
         ui.post {
             captureHidden = !visible
             captureHiddenUntil = if (visible) 0L else android.os.SystemClock.uptimeMillis() + TRANSIENT_HOLD_MS
@@ -1643,6 +1646,7 @@ class FloatingWindowUi(
      * bring the card back over the picker.
      */
     fun setAway(away: Boolean) {
+        android.util.Log.i("Body", "setAway away=$away")
         ui.post {
             if (this.away == away) return@post
             this.away = away
