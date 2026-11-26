@@ -271,9 +271,10 @@ class TextInputActivity : Activity() {
         }
         // Tap the empty space above the strip = done typing. The field keeps
         // focus otherwise — an EditText never lets go on its own — and the pill
-        // has no ✕, only camera/album/words/send. Clearing focus hides the
-        // keyboard, and the inset listener below already closes the field once
-        // the keys are really gone ([scheduleCloseWhenGone]).
+        // has no ✕, only camera/album/words/send. Clear focus, put the keyboard
+        // away and finish here: waiting for an inset change to arm
+        // [scheduleCloseWhenGone] used to leave a dead field behind when the
+        // IME never reported the drop.
         backdrop.setOnClickListener {
             // Stop the burst first: the next tick re-focuses unconditionally,
             // which would undo the clearFocus that means "I am done typing".
@@ -281,6 +282,7 @@ class TextInputActivity : Activity() {
             cancelKeyboardRetries()
             field.clearFocus()
             hideKeyboard()
+            finish()
         }
 
         // One row, anchored at the bottom. See the backdrop above for why the
@@ -448,6 +450,9 @@ class TextInputActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        // A reused SINGLE_TOP instance is a new typing session; the last one's deliberate backdrop dismissal
+        // must not keep the bounded keyboard burst from running again.
+        userDone = false
         // SINGLE_TOP can bring this same instance back after a picker abandoned it. Do not finish here —
         // that would kill the field the user just reopened — but lift the stale veil so it can show the
         // keyboard and take focus again.
@@ -597,7 +602,7 @@ class TextInputActivity : Activity() {
         onAway?.invoke(false)
     }
 
-    /** Arm the backstop that ends a picker which never comes back with a result. */
+    /** Lift the picker veil at the deadline without ending a field that may still receive a result. */
     private fun schedulePickerDeadline() {
         cancelPickerDeadline()
         val r = Runnable {
@@ -606,7 +611,9 @@ class TextInputActivity : Activity() {
             picking = false
             pickingAt = 0L
             onAway?.invoke(false)
-            finish()
+            // Deliberately no finish(): a genuine camera/picker can still return a result after 30 s, and
+            // onActivityResult -> comeBack() resumes the field. An abandoned picker is taken care of by the
+            // watchdog seeing isPicking == false, and by onResume clearing the expired state on reopen.
         }
         pickerDeadline = r
         field.postDelayed(r, TypingStateGuard.PICKER_DEADLINE_MS)
