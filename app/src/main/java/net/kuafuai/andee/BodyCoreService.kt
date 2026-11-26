@@ -640,9 +640,11 @@ class BodyCoreService : Service() {
         // Nothing is lost by staying out: the page's own exit calls
         // [ensureOverlays], which is what shows this window and unfolds the card.
         // See `SelfCheck.isPageOpen`.
-        val pageOwnsScreen = net.kuafuai.andee.device.SelfCheck.isPageOpen(this)
+        val pageFlag = net.kuafuai.andee.device.SelfCheck.isPageOpen(this)
+        val pageShowing = net.kuafuai.andee.ui.SelfCheckActivity.isShowing
+        val pageOwnsScreen = net.kuafuai.andee.ui.PageFlagGuard.ownsScreen(pageFlag, pageShowing)
+        if (pageFlag && !pageShowing) net.kuafuai.andee.device.SelfCheck.setPageOpen(this, false)
         val overlayShown = if (pageOwnsScreen) false else window.show()
-        android.util.Log.i("Body", "boot overlay pageOpen=$pageOwnsScreen shown=$overlayShown")
         if (!pageOwnsScreen && !overlayShown) {
             android.util.Log.e("Body", "overlay refused: no window (SYSTEM_ALERT_WINDOW?)")
         }
@@ -3746,11 +3748,12 @@ class BodyCoreService : Service() {
      */
     private val staleTypingRunnable = object : Runnable {
         override fun run() {
-            android.util.Log.i(
-                "Body",
-                "overlay watchdog showing=${net.kuafuai.andee.ui.TextInputActivity.isShowing} " +
-                    "picking=${net.kuafuai.andee.ui.TextInputActivity.isPicking}",
-            )
+            val pageFlag = net.kuafuai.andee.device.SelfCheck.isPageOpen(this@BodyCoreService)
+            if (pageFlag && !net.kuafuai.andee.ui.SelfCheckActivity.isShowing) {
+                net.kuafuai.andee.device.SelfCheck.setPageOpen(this@BodyCoreService, false)
+                android.util.Log.i("Body", "cleared stale self-check page flag")
+                ensureOverlays()
+            }
             window.reconcileTypingState(
                 showing = net.kuafuai.andee.ui.TextInputActivity.isShowing,
                 picking = net.kuafuai.andee.ui.TextInputActivity.isPicking,

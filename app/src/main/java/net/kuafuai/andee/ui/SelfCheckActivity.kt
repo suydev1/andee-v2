@@ -138,6 +138,12 @@ import net.kuafuai.andee.i18n.AppLocale
 class SelfCheckActivity : StageActivity() {
 
     companion object {
+
+        @Volatile private var live: java.lang.ref.WeakReference<SelfCheckActivity>? = null
+
+        /** Whether the page whose exit owns `page_open` is actually alive. */
+        val isShowing: Boolean get() = live?.get() != null
+
         /**
          * Start-intent extra: ask for the screen-capture consent as soon as
          * this page is up.
@@ -278,6 +284,7 @@ class SelfCheckActivity : StageActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        live = java.lang.ref.WeakReference(this)
 
         // The saved palette, before the first view this page draws. The service loads
         // it too, but this page is reachable from the launcher, so on a cold start
@@ -879,6 +886,12 @@ class SelfCheckActivity : StageActivity() {
     }
 
     override fun onDestroy() {
+        if (live?.get() === this) live = null
+        // Every way out clears the flag, not just the staged ✕ path: a service
+        // that starts while a vanished page still holds `page_open` never shows
+        // the card, and the user is left with no typing bar and no ball.
+        SelfCheck.setPageOpen(this, false)
+        BodyCoreService.get()?.ensureOverlays()
         // A re-read posted after this page is gone would repaint a card that is
         // on its way out — and `ui.destroy()` below takes the rows away anyway.
         settle.removeCallbacksAndMessages(null)
