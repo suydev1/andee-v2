@@ -843,7 +843,7 @@ class TextInputActivity : Activity() {
         // on a focus flag that is already broken — reassert focus on every attempt, then ask for the IME.
         field.requestFocus()
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-            .showSoftInput(field, InputMethodManager.SHOW_EXPLICIT)
+            .showSoftInput(field, InputMethodManager.SHOW_FORCED)
         if (keyboardAttempt >= KEYBOARD_RETRY_DELAYS.lastIndex) {
             keyboardRequested = false
             return
