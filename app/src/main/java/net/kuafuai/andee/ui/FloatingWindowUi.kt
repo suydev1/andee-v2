@@ -648,6 +648,7 @@ class FloatingWindowUi(
 
     // Folded into p.alpha / p.flags by [applyWindow]. Main thread only.
     private var captureHidden = false
+    private var captureHiddenUntil = 0L
     private var compact = false
 
     /** The typing field has sent the user to a camera or a photo picker. See [setAway]. */
@@ -659,6 +660,7 @@ class FloatingWindowUi(
     /** The window geometry [setTypingTop] borrowed, to be put back. */
     private var typingGeometry: IntArray? = null
     private var gesturePassthrough = false
+    private var gesturePassthroughUntil = 0L
 
     /** Whether the compositor is blurring behind us. See [Glass.frost]. */
     private var frosted = false
@@ -1518,6 +1520,7 @@ class FloatingWindowUi(
     fun setTouchable(touchable: Boolean) {
         ui.post {
             gesturePassthrough = !touchable
+            gesturePassthroughUntil = if (touchable) 0L else android.os.SystemClock.uptimeMillis() + TRANSIENT_HOLD_MS
             applyWindow()
         }
     }
@@ -1556,6 +1559,7 @@ class FloatingWindowUi(
     fun setVisibleForCapture(visible: Boolean) {
         ui.post {
             captureHidden = !visible
+            captureHiddenUntil = if (visible) 0L else android.os.SystemClock.uptimeMillis() + TRANSIENT_HOLD_MS
             applyWindow()
         }
     }
@@ -1661,6 +1665,29 @@ class FloatingWindowUi(
         away = after.away
         android.util.Log.i("Body", "cleared stale typing state (top was ${before.typingTop}, away was ${before.away})")
         applyTypingTop()
+        applyWindow()
+    }
+
+    /**
+     * A screenshot or gesture that never released the overlay would leave it
+     * invisible and untouchable, with no way for the user to tap it to ask for
+     * help. The caller releases these in `finally`; this is the backstop for a
+     * caller that was killed or interrupted before that ran. Main thread only.
+     */
+    fun reconcileTransientState() {
+        val now = android.os.SystemClock.uptimeMillis()
+        val captureExpired = OverlayTransientGuard.expired(captureHidden, captureHiddenUntil, now)
+        val gestureExpired = OverlayTransientGuard.expired(gesturePassthrough, gesturePassthroughUntil, now)
+        if (!captureExpired && !gestureExpired) return
+        if (captureExpired) {
+            captureHidden = false
+            captureHiddenUntil = 0L
+        }
+        if (gestureExpired) {
+            gesturePassthrough = false
+            gesturePassthroughUntil = 0L
+        }
+        android.util.Log.i("Body", "reclaimed stale overlay state (capture=$captureExpired gesture=$gestureExpired)")
         applyWindow()
     }
 
@@ -3910,6 +3937,9 @@ class FloatingWindowUi(
     companion object {
         /** How much of the last message the stage's live line cycles through. */
         private const val LAST_SAID_MAX = 600
+
+    /** How long a capture/gesture flag may outlive its owner before we reclaim it. */
+    private const val TRANSIENT_HOLD_MS = 10_000L
 
         /** This fork's home, opened from the foot of the card. */
         private const val GITHUB_URL = "https://github.com/Suydev/andee"

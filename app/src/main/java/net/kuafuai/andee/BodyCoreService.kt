@@ -3748,6 +3748,7 @@ class BodyCoreService : Service() {
                 showing = net.kuafuai.andee.ui.TextInputActivity.isShowing,
                 picking = net.kuafuai.andee.ui.TextInputActivity.isPicking,
             )
+            window.reconcileTransientState()
             ui.postDelayed(this, TYPING_WATCH_MS)
         }
     }
