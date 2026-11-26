@@ -1832,8 +1832,8 @@ object ToolSchemas {
         - `cron`: recurring. Standard 5 fields, "minute hour day month weekday". e.g. every day at 8 = `0 8 * * *`;
           every Monday at 9 = `0 9 * * 1`; every half hour = `0,30 * * * *`.
 
-        🔴 **The densest is once every 15 minutes.** Anything denser is refused — that is a system limit, not your choice.
-        When it is refused, tell them honestly "the fastest is once every 15 minutes" — **do not paper over it in different words, and do not say "ok, it's set"**.
+        🔴 **The densest is once every 5 minutes.** Anything denser is refused — that is a system limit, not your choice.
+        When it is refused, tell them honestly "the fastest is once every 5 minutes" — **do not paper over it in different words, and do not say "ok, it's set"**.
 
         The result carries `next_run_local` and `scheduled`: `inexact` means the time may be off by a few minutes
         (the norm when there is no exact-alarm permission). When you see `inexact`, say only "I'll speak up around that time" —
@@ -1843,7 +1843,7 @@ object ToolSchemas {
             props = mapOf(
                 "what" to prop("string", "One sentence: what to do / say at that time"),
                 "at" to prop("string", "One-off, local time YYYY-MM-DD HH:mm"),
-                "cron" to prop("string", "Recurring, 5 fields \"minute hour day month weekday\". Densest is once every 15 minutes"),
+                "cron" to prop("string", "Recurring, 5 fields \"minute hour day month weekday\". Densest is once every 5 minutes"),
             ),
         ),
         tool(

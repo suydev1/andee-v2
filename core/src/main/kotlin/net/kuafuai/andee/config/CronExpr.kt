@@ -32,11 +32,11 @@ object CronExpr {
      * rate-limited to roughly one wake per 9 minutes under Doze, and Android
      * discourages minute-level polling even with the exact-alarm permission.
      * A schedule finer than this cannot be honoured, so it is refused up front
-     * — the model has to tell the user "this can't be done, fifteen minutes is
+     * — the model has to tell the user "this can't be done, five minutes is
      * the fastest" instead of promising something the device will silently
      * miss.
      */
-    const val MIN_INTERVAL_MINUTES = 15
+    const val MIN_INTERVAL_MINUTES = 5
 
     /**
      * How far ahead to search for the next match. 1500 days covers the worst
