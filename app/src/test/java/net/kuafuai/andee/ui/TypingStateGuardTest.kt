@@ -15,16 +15,19 @@ class TypingStateGuardTest {
     }
 
     @Test
-    fun staleAwayWithFieldGoneIsCleared() {
+    fun staleAwayWithFieldGoneIsClearedEvenIfPickingIsStuck() {
         val state = TypingStateGuard.State(away = true)
         assertTrue(state.stale)
-        assertEquals(TypingStateGuard.State(), TypingStateGuard.reconcile(state, showing = false, picking = false))
+        assertEquals(TypingStateGuard.State(), TypingStateGuard.reconcile(state, showing = false, picking = true))
     }
 
     @Test
-    fun aLiveFieldKeepsItsGeometryAndAwayState() {
+    fun aLiveFieldWithNoPickerLiftsTheVeilButKeepsItsGeometry() {
         val state = TypingStateGuard.State(typingTop = 480, away = true)
-        assertEquals(state, TypingStateGuard.reconcile(state, showing = true, picking = false))
+        assertEquals(
+            TypingStateGuard.State(typingTop = 480),
+            TypingStateGuard.reconcile(state, showing = true, picking = false),
+        )
     }
 
     @Test

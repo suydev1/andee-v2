@@ -133,6 +133,19 @@ class TextInputActivity : Activity() {
      */
     @Volatile private var picking = false
 
+    /**
+     * Backstop for a camera or picker that goes away without ever delivering a
+     * result. [picking] is what keeps the card veiled and this Activity alive,
+     * so a flag stuck true leaves an invisible, untouchable card with a dead
+     * field on top of it. The result path cancels this; nothing else should.
+     */
+    private val pickerTimeout = Runnable {
+        if (picking && !isFinishing) {
+            Log.w(TAG, "picker never returned; lifting the card veil")
+            comeBack()
+        }
+    }
+
     /** Where the system camera was told to write. */
     private var shotFile: File? = null
 
@@ -445,6 +458,7 @@ class TextInputActivity : Activity() {
 
     override fun onDestroy() {
         if (::field.isInitialized) field.removeCallbacks(keyboardRetry)
+        if (::field.isInitialized) field.removeCallbacks(pickerTimeout)
         cancelCloseWhenGone()
         worker.shutdownNow()
         shotFile?.delete()
@@ -533,10 +547,13 @@ class TextInputActivity : Activity() {
     private fun goAway() {
         picking = true
         cancelCloseWhenGone()
+        field.removeCallbacks(pickerTimeout)
+        field.postDelayed(pickerTimeout, PICK_TIMEOUT_MS)
         onAway?.invoke(true)
     }
 
     private fun comeBack() {
+        field.removeCallbacks(pickerTimeout)
         picking = false
         onAway?.invoke(false)
     }
@@ -798,6 +815,9 @@ class TextInputActivity : Activity() {
          * "the field closed with the keyboard".
          */
         private const val IME_GONE_MS = 250L
+
+        /** A picker that has not come back in two minutes is gone, not slow. */
+        private const val PICK_TIMEOUT_MS = 120_000L
         private const val WRAP = LinearLayout.LayoutParams.WRAP_CONTENT
         private const val MATCH_PARENT = LinearLayout.LayoutParams.MATCH_PARENT
 
