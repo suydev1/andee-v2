@@ -981,14 +981,17 @@ class TextInputActivity : Activity() {
         /**
          * Open it. `NEW_TASK` because this comes from a service, and `SINGLE_TOP`
          * so a second tap on ⌨ raises the field already up instead of stacking a
-         * second one behind it.
+         * second one behind it. `NO_ANIMATION` because the task transition was
+         * suppressing automatic window focus (`Current transition prevents
+         * automatic focus change`), which cancelled the IME show animation.
          */
         /** [then] = "camera" / "album" to go straight on to that, as the resting pill's icons ask. */
         fun start(context: Context, then: String? = null) {
             runCatching {
                 context.startActivity(
                     Intent(context, TextInputActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                            Intent.FLAG_ACTIVITY_NO_ANIMATION)
                         .putExtra(EXTRA_THEN, then),
                 )
             }

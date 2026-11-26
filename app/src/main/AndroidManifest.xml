@@ -302,14 +302,17 @@
             android:taskAffinity="" />
         <!-- The ⌨ field a person types into. An Activity and not an overlay
              because on this ROM an overlay window cannot raise the soft
-             keyboard — measured; see ui/TextInputActivity. Translucent so the
-             app behind stays visible: this adds a field, it does not take the
-             screen. Not noHistory: that finishes it the moment the camera or
-             the photo picker opens, and their result would have nowhere to
-             land. onStop does the same job and knows when not to. -->
+             keyboard — measured; see ui/TextInputActivity. It paints its own
+             full-bleed opaque backdrop (Backdrop over Glass.CARD_SOLID), so the
+             translucent framework theme is gone: that let the launcher show
+             through behind the strip and came with a task transition that
+             suppressed automatic window focus. Not noHistory: that finishes it
+             the moment the camera or the photo picker opens, and their result
+             would have nowhere to land. onStop does the same job and knows
+             when not to. -->
         <activity
             android:name=".ui.TextInputActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:theme="@style/Theme.Body.Stage.NoPreview"
             android:excludeFromRecents="true"
             android:autoRemoveFromRecents="true"
             android:taskAffinity=""
