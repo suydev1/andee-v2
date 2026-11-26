@@ -131,7 +131,7 @@ class TextInputActivity : Activity() {
      * While it is set, the keyboard going away and this activity stopping are
      * both expected, and neither may close the field.
      */
-    private var picking = false
+    @Volatile private var picking = false
 
     /** Where the system camera was told to write. */
     private var shotFile: File? = null
@@ -847,6 +847,9 @@ class TextInputActivity : Activity() {
          * otherwise make the tap do neither.
          */
         val isShowing: Boolean get() = resumed && live?.get() != null
+
+        /** True while the field has handed the screen to a camera or photo picker. */
+        val isPicking: Boolean get() = live?.get()?.picking == true
 
         /**
          * Open it. `NEW_TASK` because this comes from a service, and `SINGLE_TOP`

@@ -1647,6 +1647,24 @@ class FloatingWindowUi(
     }
 
     /**
+     * Put the card back when the typing field is gone but its state never came
+     * back with it. [TextInputActivity.onDestroy] is the normal path; a field
+     * that dies without it would otherwise leave `away = true` and a non-zero
+     * top edge, which is an invisible, untouchable card with no way to tap it
+     * to ask for help. Main thread only, like the other window state setters.
+     */
+    fun reconcileTypingState(showing: Boolean, picking: Boolean) {
+        val before = TypingStateGuard.State(typingTop, away)
+        val after = TypingStateGuard.reconcile(before, showing, picking)
+        if (after == before) return
+        if (after.typingTop == 0) typingTop = 0
+        away = after.away
+        android.util.Log.i("Body", "cleared stale typing state (top was ${before.typingTop}, away was ${before.away})")
+        applyTypingTop()
+        applyWindow()
+    }
+
+    /**
      * Fold to the corner ball so the user sees — and can touch — the real app
      * underneath. The card covers the whole screen and is not meaningfully
      * see-through, so this is the only way anything below it is ever usable.

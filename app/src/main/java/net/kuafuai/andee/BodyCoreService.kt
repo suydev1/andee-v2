@@ -950,6 +950,7 @@ class BodyCoreService : Service() {
         startBrain(announce = false)
         startWakeWord()
         startPlanMind()
+        ui.postDelayed(staleTypingRunnable, TYPING_WATCH_MS)
         runStartupSelfCheck()
 
         // Published last, deliberately: everything above builds the body, and
@@ -1974,6 +1975,7 @@ class BodyCoreService : Service() {
         runCatching { unregisterReceiver(screenReceiver) }
         runCatching { unregisterReceiver(presentReceiver) }
         ui.removeCallbacks(planTickRunnable)
+        ui.removeCallbacks(staleTypingRunnable)
         if (::asr.isInitialized) asr.shutdown()
         if (::tts.isInitialized) tts.shutdown()
         // Before audio.release(): it ends the recording, which needs the mic
@@ -3734,6 +3736,22 @@ class BodyCoreService : Service() {
         }
     }
 
+    /**
+     * A field that goes away without emitting onDestroy leaves the card hidden
+     * and untouchable, with no way for the user to tap it to ask for help. The
+     * field's own lifecycle is authoritative; this only reconciles what the
+     * window was told against it. Cheap enough to poll on the main looper.
+     */
+    private val staleTypingRunnable = object : Runnable {
+        override fun run() {
+            window.reconcileTypingState(
+                showing = net.kuafuai.andee.ui.TextInputActivity.isShowing,
+                picking = net.kuafuai.andee.ui.TextInputActivity.isPicking,
+            )
+            ui.postDelayed(this, TYPING_WATCH_MS)
+        }
+    }
+
     /** Unlocking is the user arriving: a natural moment for the muse and the heartbeat. */
     private val presentReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: android.content.Context, i: android.content.Intent) {
@@ -4135,6 +4153,7 @@ class BodyCoreService : Service() {
         /** How often to ask whether the plan wants thinking about; [PlanMind] decides whether it does. */
         private const val PLAN_TICK_MS = 10 * 60_000L
         private const val PLAN_FIRST_TICK_MS = 60_000L
+    private const val TYPING_WATCH_MS = 1_000L
 
         private const val WS_PORT = 9008
 
